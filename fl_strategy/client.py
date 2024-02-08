@@ -1,14 +1,10 @@
 from collections import OrderedDict
+import centralized
 
 import torch
-
-
-from fl_medical.utils import utils
-from fl_strategy import centralized
-
-
 import flwr
 import os
+import utils
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
