@@ -12,11 +12,22 @@ def test_centralized():
     lr = 0.001
     epochs = 4
     
-    train_loader, test_loader, num_class = utils.load_database_df(root_path=root_path,
-                                                                  csv_path=csv_path,
-                                                                  batch_size=batch_size,
-                                                                  is_agumentation=True,
-                                                                  as_rgb=True)
+    # train_loader, test_loader, num_class = utils.load_database_df(root_path=root_path,
+    #                                                               csv_path=csv_path,
+    #                                                               batch_size=batch_size,
+    #                                                               is_agumentation=True,
+    #                                                               as_rgb=True)
+    
+    train_paramters = utils.load_database_federated(root_path=root_path,
+                                                    csv_path=csv_path,
+                                                    num_clients= 2,
+                                                    batch_size=batch_size,
+                                                    is_agumentation=True,
+                                                    as_rgb=True)
+        
+    train_loader = train_paramters["train"][1]
+    test_loader = train_paramters["test"][1]
+    num_class = train_paramters["num_class"]
     
     model = utils.make_model_pretrained(model_name=model_name, num_class=num_class)
     

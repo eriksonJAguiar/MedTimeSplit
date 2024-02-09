@@ -91,6 +91,97 @@ def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_a
 
     return train_loader, test_loader, num_class
 
+def load_database_federated(root_path, csv_path, batch_size, num_clients, image_size=(128,128), is_agumentation=False, test_size=None, as_rgb=False):
+    """load images from csv and split into train and testing resulting train and test dataloader
+
+    Args:
+        root_path (str): root path is located images
+        csv_path (str): path of csv file to get images.
+        batch_size (int): number of batch in training and test
+        num_clients (int): number of clients federated network
+        image_size (tuple, optional): _description_. Defaults to (128,128).
+        is_agumentation (bool, optional): if is True, we use augmentation in dataset. Defaults to False.
+        test_size (float, optional): if is not None, you should set up a float number that indicates partication will be split to train. 0.1 indicates 10% of test set. Defaults to None.
+        as_rgb (bool, optional): if is True is a colored image. Defaults to False.
+
+    Returns:
+        parameters (dict): contains keys: train, test, and num_class that represents train and test loader for each client
+    """
+    if is_agumentation:
+        tf_image = transforms.Compose([#transforms.ToPILImage(),
+                                    transforms.Resize(image_size),
+                                    #transforms.AutoAugment(transforms.autoaugment.AutoAugmentPolicy.CIFAR10),
+                                    transforms.RandomHorizontalFlip(),
+                                    transforms.RandomVerticalFlip(),
+                                    #transforms.RandomAffine(degrees=3, shear=0.01),
+                                    #transforms.RandomResizedCrop(size=image_size, scale=(0.875, 1.0)),
+                                    #transforms.ColorJitter(brightness=(0.7, 1.5)),
+                                    transforms.ToTensor(),
+                                    #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+                                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                                ])
+    else:
+        tf_image = transforms.Compose([
+            transforms.Resize(image_size),
+            transforms.ToTensor(),
+            #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+    
+    train_loader_clients = []
+    test_loader_clients  = []
+    
+    if test_size is None:
+        train = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, task="Train", as_rgb=as_rgb)
+        test = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, task="Test", as_rgb=as_rgb)
+        num_class = len(train.cl_name.values())
+        print(train.cl_name)
+        
+        partition_size = len(train) // num_clients
+        lengths = [partition_size] * num_clients
+        train_split = torch.utils.data.random_split(train, lengths, torch.Generator().manual_seed(RANDOM_SEED))
+        
+        partition_size = len(test) // num_clients
+        lengths = [partition_size] * num_clients
+        test_split = torch.utils.data.random_split(test, lengths, torch.Generator().manual_seed(RANDOM_SEED))
+        
+        for ds_train in train_split:
+            train_loader = DataLoader(ds_train, batch_size=batch_size, shuffle=True)
+            train_loader_clients.append(train_loader)
+        
+        for ds_test in test_split:
+            test_loader = DataLoader(ds_test, batch_size=batch_size, shuffle=False)
+            test_loader_clients.append(test_loader)
+        
+    else:
+        data = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, as_rgb=as_rgb)
+        num_class = len(train.cl_name.values())
+        print(data.cl_name)
+        
+        partition_size = len(data) // num_clients
+        lengths = [partition_size] * num_clients
+        datasets = torch.utils.data.random_split(data, lengths, torch.Generator().manual_seed(RANDOM_SEED))
+        
+        for ds in datasets:
+            len_test = len(ds) // (100*test_size)
+            len_train = len(ds) - len_test
+            
+            train, test = torch.utils.data.random_split(ds, [len_train, len_test], torch.Generator().manual_seed(RANDOM_SEED))
+            
+            train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
+            test_loader = DataLoader(test, batch_size=batch_size, shuffle=False)
+            
+            train_loader_clients.append(train_loader)
+            test_loader_clients.append(test_loader)
+            
+    parameters = {
+            "train": train_loader_clients,
+            "test": test_loader_clients,
+            "num_class": num_class,
+    }
+            
+    return parameters
+
 def make_model_pretrained(model_name, num_class):
         """function to select models pre-trained on image net and using tochvision architectures
 

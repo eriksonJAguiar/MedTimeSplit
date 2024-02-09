@@ -1,9 +1,7 @@
 """
 Module to train and test models centralized
 """
-
 import torch
-from utils import utils
 from torchmetrics.classification import Accuracy, Recall, Specificity, Precision, F1Score, AUROC
 
 # from torch.utils.tensorboard import SummaryWriter

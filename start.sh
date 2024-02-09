@@ -6,3 +6,6 @@ source fl-env/bin/activate
 
 echo "create folder to inser your datasets"
 mkdir datasets
+
+echo "Intall packages"
+pip install -r requeriments.txt
