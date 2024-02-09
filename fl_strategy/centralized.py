@@ -73,10 +73,10 @@ def train(model, train_loader, epochs, lr, num_class):
         
         # writer.close()
     
-    metrics = {"accuray": train_accuracy.compute().item(),
+    metrics = {"accuracy": train_accuracy.compute().item(),
                "precision": train_precision.compute().item(),
                "recall": train_precision.compute().item(),
-               "specicity": train_specificity.compute().item(),
+               "specificity": train_specificity.compute().item(),
                "f1_score": train_f1.compute().item(),
                "auc": train_auc.compute().item(),
             }
@@ -131,10 +131,10 @@ def test(model, test_loader, epochs, num_class):
                 test_f1(y_pred, y)
                 test_auc(probs, y)
     
-    metrics = {"val_accuray": test_accuracy.compute().item(),
+    metrics = {"val_accuracy": test_accuracy.compute().item(),
                "val_precision": test_precision.compute().item(),
                "val_recall": test_precision.compute().item(),
-               "val_specicity": test_specificity.compute().item(),
+               "val_specificity": test_specificity.compute().item(),
                "val_f1_score": test_f1.compute().item(),
                "val_auc": test_auc.compute().item(),
             }

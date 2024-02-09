@@ -4,12 +4,20 @@ from fl_strategy import centralized
 import torch
 import flwr
 
-
 def set_parameters(model, parameters):
     params_dict = zip(model.state_dict().keys(), parameters)
-    state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+    #state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+    state_dict = OrderedDict(
+        {
+            k: torch.Tensor(v) if v.shape != torch.Size([]) else torch.Tensor([0])
+            for k, v in params_dict
+        }
+    )
     model.load_state_dict(state_dict, strict=True)
+    
 
+def get_parameters(model):
+    return [val.cpu().numpy() for _, val in model.state_dict().items()]
 
 class MedicalClient(flwr.client.NumPyClient):
     """Flower client
@@ -24,13 +32,13 @@ class MedicalClient(flwr.client.NumPyClient):
         self.num_class = num_class
         
     def get_parameters(self, config):
-        return [val.cpu().numpy() for _, val in self.model.state_dict().items()]
+        return get_parameters(self.model)
         
     def fit(self, parameters, config):
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
-        centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
-        return self.get_parameters(self.model), len(self.train_loader), {}
+        loss, metrics = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
+        return self.get_parameters(self.model), len(self.train_loader), metrics
 
     def evaluate(self, parameters, config):
         set_parameters(self.model, parameters)

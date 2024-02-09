@@ -16,7 +16,38 @@ batch_size = 32
 model_name = "resnet50"
 lr = 0.001
 epochs = 4
-num_clients = 2
+num_clients = 4
+
+
+def weighted_average(metrics):
+    # Multiply accuracy of each client by number of examples used
+    acc = [num_examples * m["val_accuracy"] for num_examples, m in metrics]
+    pr = [num_examples * m["val_precision"] for num_examples, m in metrics]
+    re = [num_examples * m["val_recall"] for num_examples, m in metrics]
+    spc = [num_examples * m["val_specificity"] for num_examples, m in metrics]
+    f1 = [num_examples * m["val_f1_score"] for num_examples, m in metrics]
+    auc = [num_examples * m["val_auc"] for num_examples, m in metrics]
+    
+    examples = [num_examples for num_examples, _ in metrics]
+
+    # Aggregate and return custom metric (weighted average)
+    return {
+            "val_accuracy": sum(acc)/ sum(examples),
+            "val_precision": sum(pr)/sum(examples),
+            "val_recall": sum(re)/sum(examples),
+            "val_specificity": sum(spc)/sum(examples),
+            "val_f1_score": sum(f1)/sum(examples),
+            "val_auc": sum(auc)/sum(examples),
+            }
+
+strategy = flwr.server.strategy.FedAvg(
+    fraction_fit=1.0,
+    fraction_evaluate=0.5,
+    min_fit_clients=2,
+    min_evaluate_clients=2,
+    min_available_clients=2,
+    evaluate_metrics_aggregation_fn=weighted_average,
+)
 
 
 def client_fn(cid):
@@ -41,8 +72,8 @@ def client_fn(cid):
     
     client_features = MedicalClient(cid=cid,
                                     model=model, 
-                                    train_loader=train_loader[cid],
-                                    test_loader=test_loader[cid], 
+                                    train_loader=train_loader[int(cid)],
+                                    test_loader=test_loader[int(cid)], 
                                     lr=lr, 
                                     epoch=epochs,
                                     num_class=num_class)
@@ -51,8 +82,9 @@ def client_fn(cid):
 
 
 flwr.simulation.start_simulation(
-    client_fn=client_fn(1),
+    client_fn=client_fn,
     num_clients=num_clients,
     config=flwr.server.ServerConfig(num_rounds=3),
     client_resources=client_resources,
+    strategy=strategy
 )
