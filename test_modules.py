@@ -5,8 +5,8 @@ import os
 
 def test_centralized():
     
-    root_path = os.path.join("datasets", "MelanomaDB")
-    csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
+    root_path = os.path.join("datasets", "ISIC2020")
+    csv_path = os.path.join(root_path, "ISIC_2020_dataset.csv")
     batch_size = 32
     model_name = "resnet50"
     lr = 0.001

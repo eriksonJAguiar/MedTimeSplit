@@ -8,7 +8,6 @@ import pandas as pd
 import torch
 import os
 from sklearn.model_selection import train_test_split
-import torch
 import torchvision.models as models
 import matplotlib.pyplot as plt
 
@@ -138,11 +137,15 @@ def load_database_federated(root_path, csv_path, batch_size, num_clients, image_
         print(train.cl_name)
         
         partition_size = len(train) // num_clients
+        diff = len(train) - (partition_size*num_clients)
         lengths = [partition_size] * num_clients
+        lengths[-1] = lengths[-1]+diff
         train_split = torch.utils.data.random_split(train, lengths, torch.Generator().manual_seed(RANDOM_SEED))
         
         partition_size = len(test) // num_clients
+        diff = len(test) - (partition_size*num_clients)
         lengths = [partition_size] * num_clients
+        lengths[-1] = lengths[-1]+diff
         test_split = torch.utils.data.random_split(test, lengths, torch.Generator().manual_seed(RANDOM_SEED))
         
         for ds_train in train_split:
