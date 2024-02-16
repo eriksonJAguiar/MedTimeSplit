@@ -9,14 +9,14 @@ client_resources = None
 if device.type == "cuda":
     client_resources = {"num_gpus": 1}
 
-root_path = os.path.join("datasets", "ISIC2020")
-csv_path = os.path.join(root_path, "ISIC_2020_dataset.csv")
+root_path = os.path.join("datasets", "MelanomaDB")
+csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
 
 batch_size = 32
 model_name = "resnet50"
 lr = 0.001
-epochs = 2
-num_clients = 10
+epochs = 50
+num_clients = 5
 
 
 def weighted_average(metrics):

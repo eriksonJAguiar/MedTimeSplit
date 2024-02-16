@@ -22,8 +22,11 @@ args = vars(parser.parse_args())
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-root_path = os.path.join("datasets", "ISIC2020")
-csv_path = os.path.join(root_path, "ISIC_2020_dataset.csv")
+root_path = os.path.join(
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+            "datasets",
+            "MelanomaDB")
+csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
 
 batch_size = 32
 model_name = "resnet50"

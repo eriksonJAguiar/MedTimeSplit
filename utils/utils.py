@@ -353,6 +353,59 @@ def show_images(dataset_loader, db_name, path_to_save):
     #plt.savefig("./attack-images/preview_train_{}.png".format(db_name), bbox_inches='tight', pad_inches=0)
     plt.savefig(os.path.join(path_to_save, "preview_train_{}.png".format(db_name)))
 
+def show_all_images(dataset_loader, db_name, path_to_save):
+    """function that show images from dataloader
+
+    Args:
+        dataset_loader (torch.utils.data.Dataloader): images dataloader
+        db_name (str): database name
+        path_to_save (str): path to save images
+
+    """
+    os.makedirs(path_to_save, exist_ok=True)
+    images, labels = dataloader_to_numpy(dataset_loader)
+
+    for i in range(len(images)):    
+        plt.figure(figsize=(4, 4))
+        plt.axis("off")
+        #plt.title("Training Images")
+        plt.imshow(np.transpose(make_grid(images[i], padding=0, normalize=True), (1, 2, 0)))
+        #plt.savefig("./attack-images/preview_train_{}.png".format(db_name), bbox_inches='tight', pad_inches=0)
+        plt.savefig(os.path.join(path_to_save, f"train_{i}_label{labels[i]}.png".format(db_name)))
+
+def numpy_to_dataloader(images, labels, batch_size):
+    """convert numpy dataset to dataloader
+
+    Args:
+        images (np.ndarray): numpy array images
+        labels (np.ndarray): numpy array labels
+        batch_size (int): batch size
+
+    Returns:
+        loader (torch.utils.data.Dataloader): torch dataloader with images and labels  
+    """    
+    dataset  = CustomDataset(images, labels)
+    
+    loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False)
+    
+    return loader
+
+def dataloader_to_numpy(dataloader):
+    """convert dataloader dataset to numpy array
+
+    Args:
+        dataloader (torch.utils.data.Dataloader): pytorch dataloder with images and labels
+
+    Returns:
+        images (np.ndarray): numpy array images
+        labels (np.array): numpy array labels
+    """    
+    images, labels = zip(*[dataloader.dataset[i] for i in range(len(dataloader.dataset))])
+    images = torch.stack(images).numpy() 
+    labels = np.array(labels)
+    
+    return images, labels 
+
 class CustomDatasetFromCSV(Dataset):
     """Generating custom dataset for importing images from csv
     """    
@@ -382,5 +435,26 @@ class CustomDatasetFromCSV(Dataset):
  
         if self.tf_image:
             X = self.tf_image(X)
+        
+        return X, y
+
+class CustomDataset(Dataset):
+    """Generating custom dataset for converting to dataloader
+    """  
+    def __init__(self, images, labels):
+        self.images = images
+        self.labels = labels
+    
+    def __len__(self):
+        return len(self.images)
+    
+    def __getitem__(self, idx):
+        
+        X = self.images[idx]
+        y = self.labels[idx]
+        
+        # if self.transform:
+        #     x = Image.fromarray(self.data[idx].transpose(1,2,0))
+        #     x = self.transform(x)
         
         return X, y
