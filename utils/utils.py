@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import torch
 import os
+import torchvision
 from sklearn.model_selection import train_test_split
 import torchvision.models as models
 import matplotlib.pyplot as plt
@@ -363,15 +364,38 @@ def show_all_images(dataset_loader, db_name, path_to_save):
 
     """
     os.makedirs(path_to_save, exist_ok=True)
-    images, labels = dataloader_to_numpy(dataset_loader)
+    #images, labels = dataloader_to_numpy(dataset_loader)
 
-    for i in range(len(images)):    
-        plt.figure(figsize=(4, 4))
-        plt.axis("off")
-        #plt.title("Training Images")
-        plt.imshow(np.transpose(make_grid(images[i], padding=0, normalize=True), (1, 2, 0)))
-        #plt.savefig("./attack-images/preview_train_{}.png".format(db_name), bbox_inches='tight', pad_inches=0)
-        plt.savefig(os.path.join(path_to_save, f"train_{i}_label{labels[i]}.png".format(db_name)))
+    i = 0
+    for x, y in dataset_loader:
+        for idx in range(x.shape[0]):
+            plt.figure(figsize=(6, 6))
+            plt.axis("off")
+            #plt.title("Training Images")
+            plt.imshow(np.transpose(make_grid(x[idx], padding=0, normalize=True), (1, 2, 0)))
+            #plt.savefig("./attack-images/preview_train_{}.png".format(db_name), bbox_inches='tight', pad_inches=0)
+            plt.savefig(os.path.join(path_to_save, f"train_{i}_label{y[idx]}.png".format(db_name)), bbox_inches='tight', pad_inches=0, dpi=400)
+            i += 1 
+
+def show_one_image(image, label, path_to_save, image_name):
+    """function that show images from dataloader
+
+    Args:
+        dataset_loader (torch.utils.data.Dataloader): images dataloader
+        db_name (str): database name
+        path_to_save (str): path to save images
+
+    """
+    os.makedirs(path_to_save, exist_ok=True)
+    #images, labels = dataloader_to_numpy(dataset_loader)
+    image = image.squeeze(2)
+    #image_np = image.cpu().numpy().transpose((1, 2, 0))
+    plt.figure(figsize=(6, 6))
+    plt.axis("off")
+    #plt.title("Training Images")
+    plt.imshow(np.transpose(make_grid(image, padding=0, normalize=True), (1, 2, 0)))
+    #plt.savefig("./attack-images/preview_train_{}.png".format(db_name), bbox_inches='tight', pad_inches=0)
+    plt.savefig(os.path.join(path_to_save, f"train_{image_name}_label{np.argmax(label)}.png"), bbox_inches='tight', pad_inches=0, dpi=400)
 
 def numpy_to_dataloader(images, labels, batch_size):
     """convert numpy dataset to dataloader
@@ -400,11 +424,139 @@ def dataloader_to_numpy(dataloader):
         images (np.ndarray): numpy array images
         labels (np.array): numpy array labels
     """    
-    images, labels = zip(*[dataloader.dataset[i] for i in range(len(dataloader.dataset))])
-    images = torch.stack(images).numpy() 
-    labels = np.array(labels)
+    #images, labels = zip(*[torch.from_numpy(dataloader.dataset[i]) for i in range(len(dataloader.dataset))])
+    #images = torch.stack(images).numpy()
+    #labels = np.array(labels)
+    images, labels = zip(*[(x.numpy(), y.numpy()) for x, y in dataloader])
+    
+    images = np.concatenate(images)
+    labels = np.concatenate(labels)
     
     return images, labels 
+
+def read_model_from_checkpoint(model_path, model_name, nb_class):
+    """load a trained model using checkpoint
+
+    Args:
+        model_path (str): model weights path location
+        model_name (str): model name
+        nb_class (int): number of the classes in the dataset
+
+    Returns:
+        model (toch.nn.Module): pre-trained model selected by model name and weights
+    """
+    checkpoint = torch.load(model_path, map_location=torch.device('cpu'))
+    state_dict = {key[6:] : checkpoint['state_dict'][key] for key in checkpoint['state_dict']}
+    model = get_model_structure(model_name, nb_class)
+    model.load_state_dict(state_dict)
+    
+    return model
+
+def get_model_structure(model_name, nb_class):
+    """get model achitecture using torchvision
+
+    Args:
+        model_name (str): model selected name. Selected one of them "resnet50" "vgg16" "vgg19" "inceptionv3" "densenet" "efficientnet".
+        nb_class (int): number of classes
+
+    Returns:
+        model (toch.nn.Module): pre-trained model selected by model name and weights
+    """
+    model = None
+    #"resnet50" "vgg16" "vgg19" "inceptionv3" "densenet" "efficientnet"
+    nb_class = nb_class if nb_class > 2 else 1
+    if model_name == "resnet50":
+        model = torchvision.models.resnet50()
+        num_ftrs = model.fc.in_features
+        model.fc = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 224),
+                torch.nn.BatchNorm1d(224),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.5),
+                torch.nn.Linear(224, nb_class)
+        )
+
+    elif model_name == "vgg16":
+        model = torchvision.models.vgg.vgg16()
+        num_ftrs = model.classifier[6].in_features
+        model.classifier[6] = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 128),
+                torch.nn.BatchNorm1d(128),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.5),
+                torch.nn.Linear(128, nb_class),
+        )
+    
+    elif model_name == "vgg19":
+        model = torchvision.models.vgg.vgg19()
+        num_ftrs = model.classifier[6].in_features
+        model.classifier[6] = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 128),
+                torch.nn.BatchNorm1d(128),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.5),
+                torch.nn.Linear(128, nb_class),
+        )
+    
+    elif model_name == "inceptionv3":
+        model = torchvision.models.inception_v3()
+        model.aux_logits = False
+        
+        num_ftrs = model.fc.in_features
+        model.fc = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 128),
+                torch.nn.BatchNorm1d(128),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.5),
+                torch.nn.Linear(128, nb_class),
+        )       
+    
+    elif model_name == "efficientnet":
+        model = torchvision.models.efficientnet_b0()
+        num_ftrs = model.classifier[1].in_features
+        model.classifier[1] = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 128),
+                torch.nn.BatchNorm1d(128),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.5),
+                torch.nn.Linear(128, nb_class),
+        )
+    
+    elif model_name == "densenet":
+        model = torchvision.models.densenet121()
+        num_ftrs = model.classifier.in_features
+        model.classifier = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 128),
+                torch.nn.BatchNorm1d(128),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.5),
+                torch.nn.Linear(128, nb_class),
+        )
+    
+    return model
+
+def normalize_imageNet(image):
+    """normalize image transformed with imageNet settings
+
+    Args:
+        image (np.ndarray): image will be converted
+        is_cuda (bool, optional): if True use operations on GPU_. Defaults to True.
+
+    Returns:
+        img_norm (np.ndarray): normalized image
+    """
+    if len(image.shape) == 4:
+            return np.array([ 
+                normalize_imageNet(single_img) 
+                for single_img in image
+            ])
+       
+    MEAN = np.array([0.485, 0.456, 0.406])
+    STD = np.array([0.229, 0.224, 0.225])
+
+    img_norm = image * STD[:, None, None] + MEAN[:, None, None]
+        
+    return img_norm
 
 class CustomDatasetFromCSV(Dataset):
     """Generating custom dataset for importing images from csv
