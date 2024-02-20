@@ -1,12 +1,16 @@
 from fl_strategy import centralized
 from utils import utils
+from backdoors.generate_attacks import PoisonWithBadNets
 import os
 
 
 def test_centralized():
     
-    root_path = os.path.join("datasets", "ISIC2020")
-    csv_path = os.path.join(root_path, "ISIC_2020_dataset.csv")
+    root_path = os.path.join(
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+            "datasets",
+            "MelanomaDB")
+    csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
     batch_size = 32
     model_name = "resnet50"
     lr = 0.001
@@ -25,6 +29,11 @@ def test_centralized():
                                                     is_agumentation=True,
                                                     as_rgb=True)
         
+    
+    # badnets = PoisonWithBadNets(target_path="./backdoors/target/target1.png", target_size=(10, 10), poison_percent=0.4)
+    # train_loader = train_paramters["train"][1]
+    # train_loader = badnets.run_badNets(train_loader, "target")
+    
     train_loader = train_paramters["train"][1]
     test_loader = train_paramters["test"][1]
     num_class = train_paramters["num_class"]

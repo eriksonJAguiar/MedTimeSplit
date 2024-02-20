@@ -1,5 +1,4 @@
 from torchvision import transforms
-from torchvision.datasets import ImageFolder
 from torchvision.utils import make_grid
 from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
 from PIL import Image
@@ -388,7 +387,8 @@ def show_one_image(image, label, path_to_save, image_name):
     """
     os.makedirs(path_to_save, exist_ok=True)
     #images, labels = dataloader_to_numpy(dataset_loader)
-    image = image.squeeze(2)
+    print(image.shape)
+    #image = image.squeeze(2)
     #image_np = image.cpu().numpy().transpose((1, 2, 0))
     plt.figure(figsize=(6, 6))
     plt.axis("off")
@@ -397,20 +397,32 @@ def show_one_image(image, label, path_to_save, image_name):
     #plt.savefig("./attack-images/preview_train_{}.png".format(db_name), bbox_inches='tight', pad_inches=0)
     plt.savefig(os.path.join(path_to_save, f"train_{image_name}_label{np.argmax(label)}.png"), bbox_inches='tight', pad_inches=0, dpi=400)
 
-def numpy_to_dataloader(images, labels, batch_size):
+def numpy_to_dataloader(images, labels, batch_size, is_transform=False):
     """convert numpy dataset to dataloader
 
     Args:
         images (np.ndarray): numpy array images
         labels (np.ndarray): numpy array labels
         batch_size (int): batch size
+        is_transform (bool, optional): if true, we sould apply the transformation on image. Defaults is False.
 
     Returns:
         loader (torch.utils.data.Dataloader): torch dataloader with images and labels  
-    """    
-    dataset  = CustomDataset(images, labels)
+    """
+    image_size = (images.shape[-1], images.shape[-1])
+    if is_transform:
+        tf_image = transforms.Compose([
+                transforms.Resize(image_size),
+                transforms.ToTensor(),
+                #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+    else:
+        tf_image = None
+        
+    dataset  = CustomDataset(images, labels, tf_image=tf_image)
     
-    loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False)
+    loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False, num_workers=4)
     
     return loader
 
@@ -593,9 +605,11 @@ class CustomDatasetFromCSV(Dataset):
 class CustomDataset(Dataset):
     """Generating custom dataset for converting to dataloader
     """  
-    def __init__(self, images, labels):
+    def __init__(self, images, labels, tf_image=None):
         self.images = images
         self.labels = labels
+        self.transform = tf_image
+        self.mode = "RGB" if images[0].shape[0] == 3 else "L"
     
     def __len__(self):
         return len(self.images)
@@ -603,10 +617,12 @@ class CustomDataset(Dataset):
     def __getitem__(self, idx):
         
         X = self.images[idx]
-        y = self.labels[idx]
+        y = int(self.labels[idx])
         
-        # if self.transform:
-        #     x = Image.fromarray(self.data[idx].transpose(1,2,0))
-        #     x = self.transform(x)
+        if self.transform:
+            #X = Image.fromarray((X.transpose(1,2,0) * 255).astype(np.uint8))
+            X = X.transpose(1,2,0).squeeze(axis=2) if self.mode == "L" else X.transpose(1,2,0)
+            X = Image.fromarray(X, mode=self.mode)
+            X = self.transform(X)
         
         return X, y

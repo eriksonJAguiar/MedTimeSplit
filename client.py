@@ -1,4 +1,5 @@
 from fl_strategy.client_structure import MedicalClient
+from backdoors.generate_attacks import PoisonWithBadNets
 from utils import utils
 import flwr
 import torch
@@ -16,6 +17,7 @@ parser = argparse.ArgumentParser(description='')
 # parser.add_argument('-an', '--attack_name', help="Attack name FGSM, PGD, CW or UAP", required=True)
 parser.add_argument('-nc', '--num_cli', help="number of clients on the network", required=True)
 parser.add_argument('-i', '--cid', help="client number", required=True)
+parser.add_argument("-b", "--is_bad", action="store_true", required=False)
 #parser.add_argument('-pa', '--path_attack', help="Attack noise", required=True)
 
 args = vars(parser.parse_args())
@@ -34,6 +36,7 @@ lr = 0.001
 epochs = 1
 num_clients = int(args["num_cli"])
 cid = int(args["cid"])
+is_bad = args["is_bad"]
 
 
 train_paramters = utils.load_database_federated(root_path=root_path,
@@ -42,17 +45,23 @@ train_paramters = utils.load_database_federated(root_path=root_path,
                                                 batch_size=batch_size,
                                                 is_agumentation=True,
                                                 as_rgb=True)
+#adding backdoor into training images
+if is_bad:
+    badnets = PoisonWithBadNets(target_path="./backdoors/target/alert.png", target_size=(10, 10))
+    train_loader = train_paramters["train"][cid]
+    train_loader = badnets.run_badNets(train_loader, "pattern")
+else:
+    train_loader = train_paramters["train"][cid]
 
-train_loader = train_paramters["train"]
-test_loader = train_paramters["test"]
+test_loader = train_paramters["test"][cid]
 num_class = train_paramters["num_class"]
 
 model = utils.make_model_pretrained(model_name=model_name, num_class=num_class)
     
 client_features = MedicalClient(cid=cid,
                                 model=model, 
-                                train_loader=train_loader[cid],
-                                test_loader=test_loader[cid], 
+                                train_loader=train_loader,
+                                test_loader=test_loader, 
                                 lr=lr, 
                                 epoch=epochs,
                                 num_class=num_class)

@@ -16,7 +16,7 @@ from art.utils import to_categorical
 
 class PoisonWithBadNets():
 
-    def __init__(self, target_path, poison_percent=0.2, target_size=(5,5)):
+    def __init__(self, target_size, target_path=None, poison_percent=0.2):
         self.target_path = target_path
         self.poison_percent = poison_percent
         self.target_size = target_size
@@ -46,6 +46,8 @@ class PoisonWithBadNets():
                 poison_images, poison_labels = backdoor_attack.poison(
                     imgs_to_be_poisoned, y=labels_to_be_poisoned
                 )
+                #utils.show_one_image(torch.tensor(poison_images[0]), torch.tensor(poison_labels[0]), "./datasets/poison", "poison_test")
+                
                 x_poison = np.append(x_poison, poison_images, axis=0)
                 y_poison = np.append(y_poison, poison_labels, axis=0)
                 is_poison = np.append(is_poison, np.ones(num_poison))
@@ -55,8 +57,13 @@ class PoisonWithBadNets():
             return is_poison, x_poison, y_poison
     
     def poison_func_pattern(self, x):
-        return np.expand_dims(add_pattern_bd(x, pixel_value=self.max_val, channels_first=True), axis=3)
-
+        images = np.expand_dims(add_pattern_bd(x, pixel_value=self.max_val, channels_first=True), axis=3)
+        
+        if len(images.shape) == 5:
+                images = images.squeeze(3)
+        
+        return images
+    
     def poison_func_single(self, x):
         if len(x.shape) == 4:
             x = np.transpose(x, (0, 2, 3, 1))
@@ -64,8 +71,9 @@ class PoisonWithBadNets():
             x = np.transpose(x, (1, 2, 0))
             
         images = add_single_bd(x, pixel_value=self.max_val)
-            
+         
         return np.transpose(images, (0, 3, 1, 2))
+            
         
     def poison_func_target(self, x):
         x = utils.normalize_imageNet(x)
@@ -113,7 +121,7 @@ class PoisonWithBadNets():
         x_train = x_poisoned_raw[shuffled_indices]
         y_train = y_poisoned_raw[shuffled_indices]
         
-        dataloader_poisoned = utils.numpy_to_dataloader(images=x_train, labels=y_train, batch_size=32)
+        dataloader_poisoned = utils.numpy_to_dataloader(images=x_train, labels=y_train, batch_size=32, is_transform=True)
         
         return dataloader_poisoned
 

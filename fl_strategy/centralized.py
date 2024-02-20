@@ -42,7 +42,6 @@ def train(model, train_loader, epochs, lr, num_class):
         for data in train_loader:
             x, y  = data
             x, y = x.to(device), y.to(device)
-            
             opt.zero_grad()
             logits = model(x)
             loss = criterion(logits, y)
