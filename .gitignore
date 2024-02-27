@@ -2,3 +2,6 @@ fl-env
 runs
 datasets
 __pycache__
+*.png
+*.jpg
+*.ipynb

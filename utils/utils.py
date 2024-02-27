@@ -21,7 +21,7 @@ torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 
 
-def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_agumentation=False, test_size=None, as_rgb=False):
+def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_agumentation=False, test_size=None, as_rgb=False, is_stream=False):
     """load images from csv and split into train and testing resulting train and test dataloader
 
     Args:
@@ -65,6 +65,9 @@ def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_a
         num_class = len(train.cl_name.values())
             
         print(train.cl_name)
+        
+        if is_stream:
+            return train, test, num_class
             
         train_loader = DataLoader(train, batch_size=batch_size, num_workers=4, shuffle=True)
         test_loader = DataLoader(test, batch_size=batch_size, num_workers=4, shuffle=False)
@@ -82,6 +85,9 @@ def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_a
         test_sampler = SubsetRandomSampler(test)
             
         num_class = len(data.cl_name.values())
+        
+        if is_stream:
+            return train_sampler, test_sampler, num_class
             
         train_loader = DataLoader(data, batch_size=batch_size, sampler=train_sampler, num_workers=4)
         test_loader = DataLoader(data, batch_size=batch_size, sampler=test_sampler, num_workers=4)
@@ -90,7 +96,7 @@ def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_a
 
     return train_loader, test_loader, num_class
 
-def load_database_federated(root_path, csv_path, batch_size, num_clients, image_size=(128,128), is_agumentation=False, test_size=None, as_rgb=False):
+def load_database_federated(root_path, csv_path, batch_size, num_clients, image_size=(128,128), is_agumentation=False, test_size=None, as_rgb=False, is_stream=False):
     """load images from csv and split into train and testing resulting train and test dataloader
 
     Args:
@@ -150,11 +156,11 @@ def load_database_federated(root_path, csv_path, batch_size, num_clients, image_
         
         for ds_train in train_split:
             train_loader = DataLoader(ds_train, batch_size=batch_size, shuffle=True)
-            train_loader_clients.append(train_loader)
+            train_loader_clients.append(ds_train if is_stream else train_loader)
         
         for ds_test in test_split:
             test_loader = DataLoader(ds_test, batch_size=batch_size, shuffle=False)
-            test_loader_clients.append(test_loader)
+            test_loader_clients.append(ds_test if is_stream else test_loader)
         
     else:
         data = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, as_rgb=as_rgb)
@@ -174,8 +180,8 @@ def load_database_federated(root_path, csv_path, batch_size, num_clients, image_
             train_loader = DataLoader(train, batch_size=batch_size, shuffle=True)
             test_loader = DataLoader(test, batch_size=batch_size, shuffle=False)
             
-            train_loader_clients.append(train_loader)
-            test_loader_clients.append(test_loader)
+            train_loader_clients.append(train if is_stream else train_loader)
+            test_loader_clients.append(test if is_stream else test_loader)
             
     parameters = {
             "train": train_loader_clients,
