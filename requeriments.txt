@@ -7,3 +7,4 @@ pandas
 torchmetrics
 pillow
 scikit-learn
+avalanche
