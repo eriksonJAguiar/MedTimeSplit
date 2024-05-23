@@ -23,5 +23,7 @@ if __name__ == "__main__":
     #clean_label = PoisonWithCleanLabel(target_path="./backdoors/target/alert.png", target_size=(10, 10), poison_percent=0.1, target_label=1)
     #clean_label.run_cleanLabels(train_loader, "target", model_name=model_name, lr=lr)
     badnets = PoisonWithBadNets(target_path="./backdoors/target/alert.png", target_size=(10, 10))
-    posined_dataloder = badnets.run_badNets(train_loader, "pattern")
+    posined_dataloder = badnets.run_badNets(train_loader, "target")
     #utils.show_all_images(posined_dataloder, db_name="Poisoned", path_to_save="./datasets/poison")
+    images, labels = next(iter(posined_dataloder))
+    utils.show_one_image(image=images[0], label=labels[0], path_to_save='./', image_name='test_image')

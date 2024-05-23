@@ -7,6 +7,7 @@ from utils import utils
 import os
 import time
 from PIL import Image
+import matplotlib.pyplot as plt
 
 from art.estimators.classification import PyTorchClassifier
 from art.attacks.poisoning import PoisoningAttackBackdoor, PoisoningAttackCleanLabelBackdoor, BadDetGlobalMisclassificationAttack, HiddenTriggerBackdoorPyTorch, SleeperAgentAttack
@@ -23,7 +24,16 @@ class PoisonWithBadNets():
         self.max_val = 0
     
     def posison_dataset(self, x_clean, y_clean, poison_func):
-        
+        """function to generate poisoning dataset
+
+        Args:
+            x_clean (_type_): _description_
+            y_clean (_type_): _description_
+            poison_func (_type_): _description_
+
+        Returns:
+            DataLoader: dataset with poisoned examples
+        """
         x_poison = np.copy(x_clean)
         y_poison = np.copy(y_clean)
         is_poison = np.zeros(np.shape(y_poison)[0])
@@ -57,7 +67,9 @@ class PoisonWithBadNets():
             return is_poison, x_poison, y_poison
     
     def poison_func_pattern(self, x):
+        print(x.shape)
         images = np.expand_dims(add_pattern_bd(x, pixel_value=self.max_val, channels_first=True), axis=3)
+        #images = add_pattern_bd(x, pixel_value=self.max_val, channels_first=False)
         
         if len(images.shape) == 5:
                 images = images.squeeze(3)
@@ -114,6 +126,8 @@ class PoisonWithBadNets():
             x_clean=images, y_clean=y, poison_func=posion_func
         )
         
+        #utils.show_one_image(torch.tensor(x_poisoned_raw[-1]), torch.tensor(y_poisoned_raw[-1]), "./datasets/poison", "poison_test")
+        
         # Shuffle training data
         n_train = np.shape(y_poisoned_raw)[0]
         shuffled_indices = np.arange(n_train)
@@ -121,7 +135,10 @@ class PoisonWithBadNets():
         x_train = x_poisoned_raw[shuffled_indices]
         y_train = y_poisoned_raw[shuffled_indices]
         
-        dataloader_poisoned = utils.numpy_to_dataloader(images=x_train, labels=y_train, batch_size=32, is_transform=True)
+        dataloader_poisoned = utils.numpy_to_dataloader(images=x_train, labels=y_train, batch_size=32, is_transform=False)
+        #images, labels = next(iter(dataloader_poisoned))
+        
+        #utils.show_one_image(images[0], labels[0], "./datasets/poison", "poison_test")
         
         return dataloader_poisoned
 
