@@ -14,6 +14,14 @@ from torch.optim import Adam
 from torch.nn import CrossEntropyLoss
 from avalanche.models import SimpleMLP
 from avalanche.training.supervised import Naive
+from avalanche.training.plugins import EarlyStoppingPlugin
+
+from avalanche.evaluation.metrics import forgetting_metrics, \
+accuracy_metrics, loss_metrics, timing_metrics, cpu_usage_metrics, \
+confusion_matrix_metrics, disk_usage_metrics, StreamClassAccuracy, StreamTopkAccuracy
+from avalanche.logging import InteractiveLogger
+from avalanche.training.plugins import EvaluationPlugin
+
 # dataset = SplitMNIST(10, shuffle=False, class_ids_from_zero_in_each_exp=False)
 # dataset2 = SplitMNIST(5, shuffle=False, return_task_id=True, class_ids_from_zero_in_each_exp=True)
 #dataset = PermutedMNIST(n_experiences=3)
@@ -148,12 +156,37 @@ def run_continual(root_path, csv_path):
         balance_experiences=True,
     )
     
-    model = utils.make_model_pretrained("resnet50", num_class=7)
+    # benchmark = nc_benchmark(
+    #     train_dataset=train, 
+    #     test_dataset=test,
+    #     n_experiences=7, 
+    #     task_labels=True,
+    # )
+    
+    interactive_logger = InteractiveLogger()
+
+    eval_plugin = EvaluationPlugin(
+        accuracy_metrics(minibatch=True, epoch=True, experience=True, stream=True),
+        loss_metrics(minibatch=True, epoch=True, experience=True, stream=True),
+        timing_metrics(epoch=True),
+        forgetting_metrics(experience=True, stream=True),
+        cpu_usage_metrics(experience=True),
+        confusion_matrix_metrics(num_classes=num_class, save_image=False, stream=True),
+        disk_usage_metrics(minibatch=True, epoch=True, experience=True, stream=True),
+        StreamTopkAccuracy(top_k=1),
+        StreamClassAccuracy(classes=list(range(0,num_class))),
+        loggers=[InteractiveLogger()],
+        strict_checks=False
+    )
+    
+    model = utils.make_model_pretrained("resnet50", num_class=num_class)
     optimizer = Adam(model.parameters(), lr=0.001)
     criterion = CrossEntropyLoss()
     cl_strategy = Naive(
         model, optimizer, criterion,
-        train_mb_size=100, train_epochs=10, eval_mb_size=100
+        train_mb_size=100, train_epochs=10, eval_mb_size=100,
+        plugins=[EarlyStoppingPlugin(patience=5, val_stream_name='train')],
+        evaluator=eval_plugin
     )
     
     results = []
@@ -166,21 +199,23 @@ def run_continual(root_path, csv_path):
         eid = experience.current_experience
         # for classification benchmarks, experiences have a list of classes in this experience
         clss = experience.classes_in_this_experience
-        print(f"EID={eid}, classes={clss}")
+        task = experience.task_label
+        print(f"EID={eid}, classes={clss}, task={task}")
         # the experience provides a dataset
         print(f"data: {len(experience.dataset)} samples")
         
         cl_strategy.train(experience)
         print('Training completed')
-
+        
         print('Computing accuracy on the whole test set')
         results.append(cl_strategy.eval(benchmark.test_stream))
     
     print(results)
+    print(eval_plugin.get_all_metrics())
     
-    print("Testing...")
-    for exp in benchmark.test_stream:
-        print(f"EID={exp.current_experience}, classes={exp.classes_in_this_experience}")
+    # print("Testing...")
+    # for exp in benchmark.test_stream:
+    #     print(f"EID={exp.current_experience}, classes={exp.classes_in_this_experience}")
         
     
     # for experience in benchmark.train_stream:

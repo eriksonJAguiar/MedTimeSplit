@@ -668,18 +668,17 @@ class CustomDatasetFromCSV(Dataset):
     """Generating custom dataset for importing images from csv
     """    
     def __init__(self, path_root, tf_image, csv_name, as_rgb=False, task=None):
-        data = pd.read_csv(csv_name)
+        table_data = pd.read_csv(csv_name)
         if task is not None:
-            data.query("Task == @task", inplace=True)
+            table_data.query("Task == @task", inplace=True)
         
-        self.data = data["x"]
-        self.targets = data["y"]
+        self.data = table_data["x"].tolist()
+        self.targets = table_data["y"].tolist()
         
         self.as_rgb = as_rgb
         self.tf_image = tf_image
         self.root = path_root
         self.cl_name = {c: i for i, c in enumerate(np.unique(self.targets))}
-        print(self.cl_name)
         self.targets = [self.cl_name[k] for k in self.targets]
         self.BARVALUE = "/" if not os.name == "nt" else "\\"
     
@@ -692,8 +691,9 @@ class CustomDatasetFromCSV(Dataset):
         
         #x_path = os.path.join(self.root, self.data.iloc[idx, 0].split(self.BARVALUE)[-2], self.data.iloc[idx, 0].split(self.BARVALUE)[-1])
         x_path = os.path.join(self.root, self.data[idx])
-        y = self.cl_name[self.targets[idx]]
-        #y = self.targets[idx]
+        #print(f"target: {self.targets[idx]}")
+        #y = self.cl_name[self.targets[idx]]
+        y = self.targets[idx]
         
         X = Image.open(x_path).convert("RGB")
         #X = cv2.cvtColor(cv2.imread(x_path), cv2.COLOR_BGR2RGB) if self.as_rgb else cv2.imread(x_path, cv2.IMREAD_GRAYSCALE)
