@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 import os
+import cv2
 import torchvision
 from sklearn.model_selection import train_test_split
 import torchvision.models as models
@@ -20,7 +21,7 @@ RANDOM_SEED = 43
 torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 
-def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_agumentation=False, test_size=None, as_rgb=False, is_stream=False):
+def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_agumentation=False, test_size=None, as_rgb=False, is_stream=False, domain_type=None):
     """load images from csv and split into train and testing resulting train and test dataloader
 
     Args:
@@ -31,7 +32,8 @@ def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_a
         is_agumentation (bool, optional): if is True, we use augmentation in dataset. Defaults to False.
         test_size (float, optional): if is not None, you should set up a float number that indicates partication will be split to train. 0.1 indicates 10% of test set. Defaults to None.
         as_rgb (bool, optional): if is True is a colored image. Defaults to False.
-
+        is_stream (bool, optional): define if dataset is prepared for streaming training or not. Defaults to False.
+        domain_type (str, optional): if is stream,
     Returns:
         train_loader (torch.utils.data.Dataloader): images dataloader for training
         test_loader (torch.utils.data.Dataloader): images dataloader for testing
@@ -59,8 +61,8 @@ def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_a
         ])
         
     if test_size is None:
-        train = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, task="Train", as_rgb=as_rgb)
-        test = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, task="Test", as_rgb=as_rgb)
+        train = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, task="Train", as_rgb=as_rgb, domain_type=domain_type)
+        test = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, task="Test", as_rgb=as_rgb, domain_type=domain_type)
         num_class = len(train.cl_name.values())
             
         print(train.cl_name)
@@ -664,16 +666,46 @@ def normalize_imageNet(image):
         
     return img_norm
 
+def generate_domain(image, domain_type="normal"):
+    """generate dataset domain shift
+
+    Args:
+        image (np.ndarray): input image to be convert to another domain
+        domain_type (str, optional): domain can be a fixed string, such as normal, illumination or occlusion. Defaults to "normal".
+
+    Returns:
+        noise_image (PIL.Image): image modified with gaussian noise, illumination, or occlusion
+    """
+    image = np.asarray(image)
+    noise_image = image.copy()
+    
+    if domain_type == "normal":
+        normal_noise = np.random.normal(0, 25, image.shape)
+        noise_image = image + normal_noise
+        noise_image = np.clip(noise_image, 0, 255).astype(np.uint8)
+    elif domain_type == "illumination":
+        brightness = 10 
+        contrast = 1.4  
+        noise_image = cv2.addWeighted(noise_image, contrast, np.zeros(image.shape, image.dtype), 0, brightness) 
+    elif domain_type == "occlusion":
+        h, w, _ = image.shape
+        noise_image = cv2.rectangle(noise_image, (w, h), (w - (w//8), h - (h//8)), (255, 255, 255), cv2.FILLED)
+    
+    noise_image = Image.fromarray(noise_image)
+    
+    return noise_image
+    
 class CustomDatasetFromCSV(Dataset):
     """Generating custom dataset for importing images from csv
     """    
-    def __init__(self, path_root, tf_image, csv_name, as_rgb=False, task=None):
+    def __init__(self, path_root, tf_image, csv_name, as_rgb=False, task=None, domain_type=None):
         table_data = pd.read_csv(csv_name)
         if task is not None:
             table_data.query("Task == @task", inplace=True)
         
         self.data = table_data["x"].tolist()
         self.targets = table_data["y"].tolist()
+        self.domain_type = domain_type
         
         self.as_rgb = as_rgb
         self.tf_image = tf_image
@@ -696,6 +728,8 @@ class CustomDatasetFromCSV(Dataset):
         y = self.targets[idx]
         
         X = Image.open(x_path).convert("RGB")
+        if self.domain_type is not None:
+            X  = generate_domain(X, domain_type=self.domain_type)
         #X = cv2.cvtColor(cv2.imread(x_path), cv2.COLOR_BGR2RGB) if self.as_rgb else cv2.imread(x_path, cv2.IMREAD_GRAYSCALE)
  
         if self.tf_image:

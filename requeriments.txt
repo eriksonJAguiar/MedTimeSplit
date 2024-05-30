@@ -1,5 +1,6 @@
 flwr[simulation]
 numpy
+opencv-python
 torch
 torchvision
 matplotlib
