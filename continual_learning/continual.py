@@ -29,6 +29,7 @@ device = torch.device(
     else "cpu"
 )
 
+print(f"Device: {device}")
 
 def run_continual(train, test, num_class, model_name, lr=0.001,train_epochs=10, experiences=5):
 
@@ -47,7 +48,7 @@ def run_continual(train, test, num_class, model_name, lr=0.001,train_epochs=10, 
         timing_metrics(epoch=True),
         forgetting_metrics(experience=True, stream=True),
         cpu_usage_metrics(experience=True),
-        confusion_matrix_metrics(num_classes=num_class, save_image=False, stream=True),
+        #confusion_matrix_metrics(num_classes=num_class, save_image=False, stream=True),
         disk_usage_metrics(minibatch=True, epoch=True, experience=True, stream=True),
         StreamClassAccuracy(classes=list(range(0,num_class))),
         StreamAccuracy(),
@@ -62,7 +63,8 @@ def run_continual(train, test, num_class, model_name, lr=0.001,train_epochs=10, 
         model, optimizer, criterion,
         train_mb_size=100, train_epochs=train_epochs, eval_mb_size=100,
         plugins=[EarlyStoppingPlugin(patience=5, val_stream_name='train')],
-        evaluator=eval_plugin
+        evaluator=eval_plugin,
+        device=device
     )
     
     results = []
@@ -70,7 +72,7 @@ def run_continual(train, test, num_class, model_name, lr=0.001,train_epochs=10, 
     print("Training...")
     for experience in benchmark.train_stream:
         print("Start of experience ", experience.current_experience)
-        #experiences have an ID that denotes its position in the stream
+        # experiences have an ID that denotes its position in the stream
         # this is used only for logging (don't rely on it for training!)
         eid = experience.current_experience
         # for classification benchmarks, experiences have a list of classes in this experience
@@ -84,7 +86,26 @@ def run_continual(train, test, num_class, model_name, lr=0.001,train_epochs=10, 
         print('Training completed')
         
         print('Computing accuracy on the whole test set')
-        results.append(cl_strategy.eval(benchmark.test_stream))
+        metrics_performance = cl_strategy.eval(benchmark.test_stream)
+        
+        keys = list(metrics_performance.keys())
+        line = {}
+        for i in range(len(keys)):
+            keys_slice = keys[i].split("/")
+            metric = keys_slice[0]
+            if metric.find("ClassAcc") != -1:
+                metric = metric + "_" + keys_slice[-1]
+            
+            phase = keys_slice[1].split("_")[0]
+            metric = metric + "_" + phase
+            line["Experiment"] = str(eid)
+            line[metric] = metrics_performance[keys[i]]
+            
+        
+        results.append(line)
+        #results.append(metrics_performance)
+        
+    print(results)
+    #for res in enumerate(results)
     
-
     return results
