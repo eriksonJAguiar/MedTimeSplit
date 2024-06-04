@@ -12,8 +12,8 @@ csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
 
 lr = 0.001
 model_name = "resnet50"
-experiences = 3
-epoches = 10
+experiences = 10
+epoches = 30
 
 domain_type = [None, "normal", "illumination", "occlusion"]
 #domain_type = ["normal", "occlusion"]
@@ -39,7 +39,9 @@ for domain in domain_type:
     #print(len(results_metrics))
     print("Dataframe:")
     domain_data = pd.DataFrame(results_metrics)
-    domain_data["Domain"] = domain
+    print(domain)
+    domain_data.insert(1, "Domain", "NONE" if domain is None else domain.upper())
+    print(domain_data)
     
     if os.path.exists("cl_metrics.csv"):
         domain_data.to_csv("cl_metrics.csv", mode="a", header=False, index=False)
