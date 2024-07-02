@@ -12,8 +12,8 @@ csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
 
 lr = 0.001
 model_name = "resnet50"
-experiences = 10
-epoches = 30
+experiences = 7
+epoches = 10
 
 domain_type = [None, "normal", "illumination", "occlusion"]
 #domain_type = ["normal", "occlusion"]
@@ -34,7 +34,7 @@ for domain in domain_type:
     #print(lb)
     #print(np.expand_dims(img, axis=0).shape)
     #utils.show_one_image(img, lb, ".", f"lesion_img_{domain}")
-    results_metrics  = run_continual(train, test, num_class, model_name, lr, train_epochs=epoches, experiences=experiences)
+    results_metrics = run_continual(train, test, num_class, model_name, lr, train_epochs=epoches, experiences=experiences)
     #print("Final Results:")
     #print(len(results_metrics))
     print("Dataframe:")

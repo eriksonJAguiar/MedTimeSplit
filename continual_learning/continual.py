@@ -14,13 +14,34 @@ from torch.optim import Adam
 from torch.nn import CrossEntropyLoss
 from avalanche.models import SimpleMLP
 from avalanche.training.supervised import Naive
+from avalanche.training.supervised.strategy_wrappers_online import OnlineNaive
 from avalanche.training.plugins import EarlyStoppingPlugin
 
 from avalanche.evaluation.metrics import forgetting_metrics, \
 accuracy_metrics, class_accuracy_metrics, loss_metrics, timing_metrics, cpu_usage_metrics, \
-confusion_matrix_metrics, disk_usage_metrics, StreamClassAccuracy, StreamAccuracy
+confusion_matrix_metrics, disk_usage_metrics, StreamClassAccuracy, StreamAccuracy, \
+StreamBWT, StreamForwardTransfer, ExperienceBWT, ExperienceForwardTransfer, \
+bwt_metrics, forward_transfer_metrics
 from avalanche.logging import InteractiveLogger
 from avalanche.training.plugins import EvaluationPlugin
+from avalanche.benchmarks.utils import concat_datasets
+from avalanche.training.templates import SupervisedTemplate
+
+
+class Cumulative(SupervisedTemplate):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.dataset = None  # cumulative dataset
+
+    def train_dataset_adaptation(self, **kwargs):
+        super().train_dataset_adaptation(**kwargs)
+        curr_data = self.experience.dataset
+        if self.dataset is None:
+            self.dataset = curr_data
+        else:
+            self.dataset = concat_datasets([self.dataset, curr_data])
+        self.adapted_dataset = self.dataset.train()
+
 
 # --- CONFIG
 device = torch.device(
@@ -40,6 +61,15 @@ def run_continual(train, test, num_class, model_name, lr=0.001,train_epochs=10, 
         task_labels=False,
         balance_experiences=True,
     )
+    
+    # benchmark = nc_benchmark(
+    #     train_dataset=train, 
+    #     test_dataset=test,
+    #     n_experiences=experiences, 
+    #     task_labels=True,
+    #     one_dataset_per_exp=True,
+    #     #balance_experiences=True,
+    # )
 
     eval_plugin = EvaluationPlugin(
         accuracy_metrics(minibatch=True, epoch=True, experience=True, stream=True),
@@ -51,7 +81,13 @@ def run_continual(train, test, num_class, model_name, lr=0.001,train_epochs=10, 
         #confusion_matrix_metrics(num_classes=num_class, save_image=False, stream=True),
         disk_usage_metrics(minibatch=True, epoch=True, experience=True, stream=True),
         StreamClassAccuracy(classes=list(range(0,num_class))),
-        StreamAccuracy(),
+        # StreamAccuracy(),
+        # StreamBWT(),
+        # StreamForwardTransfer(),
+        # ExperienceForwardTransfer(),
+        # ExperienceBWT(),
+        bwt_metrics(experience=True, stream=True),
+        forward_transfer_metrics(experience=True, stream=True),
         loggers=[InteractiveLogger()],
         strict_checks=False
     )
@@ -66,6 +102,22 @@ def run_continual(train, test, num_class, model_name, lr=0.001,train_epochs=10, 
         evaluator=eval_plugin,
         device=device
     )
+    # cl_strategy = OnlineNaive(
+    #     model, optimizer, criterion,
+    #     train_mb_size=100, eval_mb_size=100,
+    #     train_passes=2,
+    #     eval_every= 1,
+    #     plugins=[EarlyStoppingPlugin(patience=5, val_stream_name='train')],
+    #     evaluator=eval_plugin,
+    #     device=device
+    # )
+    # cl_strategy = Cumulative(
+    #     model, optimizer, criterion,
+    #     train_mb_size=128, train_epochs=train_epochs, eval_mb_size=128,
+    #     plugins=[EarlyStoppingPlugin(patience=5, val_stream_name='train')],
+    #     evaluator=eval_plugin,
+    #     device=device
+    # )
     
     results = []
     print('Starting experiment...')
