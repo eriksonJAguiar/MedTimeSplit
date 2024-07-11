@@ -250,13 +250,13 @@ def split_database_continous(root_path, csv_path, batch_size, image_size=(128,12
     return test_samples, test_samples, num_class
 
 def load_database_federated(root_path, csv_path, batch_size, num_clients, image_size=(128,128), is_agumentation=False, test_size=None, as_rgb=False, is_stream=False):
-    """load images from csv and split into train and testing resulting train and test dataloader
+    """load images from csv and split into train and test resulting partitions of clients on Federated learning
 
     Args:
         root_path (str): root path is located images
         csv_path (str): path of csv file to get images.
         batch_size (int): number of batch in training and test
-        num_clients (int): number of clients federated network
+        num_clients (int): number of clients on federated network
         image_size (tuple, optional): _description_. Defaults to (128,128).
         is_agumentation (bool, optional): if is True, we use augmentation in dataset. Defaults to False.
         test_size (float, optional): if is not None, you should set up a float number that indicates partication will be split to train. 0.1 indicates 10% of test set. Defaults to None.

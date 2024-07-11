@@ -18,9 +18,10 @@ model_names = ["resnet50", "vgg16", "vgg19", "inceptionv3", "densenet", "efficie
 #model_names = ["inceptionv3"]
 lr = 0.001
 epochs = 50
+iterations = 10
 
 
-for i in range(10):
+for i in range(iterations):
     for model_name in model_names:        
         
         train, test, num_class = utils.load_database_df(
@@ -41,21 +42,21 @@ for i in range(10):
         
         time_start_train  = time.time()
         print("===== Train Phase ==========")
-        loss_train, train_metrics = centralized.train(model=model,
-                                                train_loader=train,
-                                                epochs=epochs,
-                                                lr=lr,
-                                                num_class=num_class)
+        loss_train, train_metrics, train_metrics_epoch = centralized.train(model=model,
+                                                                           train_loader=train,
+                                                                           epochs=epochs,
+                                                                           lr=lr,
+                                                                           num_class=num_class)
         time_end_train = time.time()
         time_train  = time_end_train - time_start_train
 
         
         time_start_test  = time.time()
         print("===== Test Phase ==========")
-        loss_test, test_metrics = centralized.test(model=model,
-                                                    test_loader=test,
-                                                    epochs=epochs,
-                                                    num_class=num_class)
+        loss_test, test_metrics, test_metrics_epoch = centralized.test(model=model,
+                                                                        test_loader=test,
+                                                                        epochs=epochs,
+                                                                        num_class=num_class)
         time_end_test = time.time()
         test_train  = time_end_test - time_start_test
         
@@ -66,8 +67,8 @@ for i in range(10):
         train_metrics["train_time"] = time_train
         test_metrics["val_time"] = test_train
         
-        print(train_metrics)
-        print(test_metrics)
+        #print(train_metrics)
+        #print(test_metrics)
         
         print("Dataframe:")
         train_results = pd.DataFrame([train_metrics])
@@ -81,4 +82,15 @@ for i in range(10):
             final_results.to_csv("no_fed_metrics.csv", mode="a", header=False, index=False)
         else:
             final_results.to_csv("no_fed_metrics.csv", mode="a", header=True, index=False)
+            
+        train_results_epoch = pd.DataFrame(train_metrics_epoch)
+        test_results_epoch = pd.DataFrame(test_metrics_epoch)
+        final_results_epoch = pd.concat([train_results_epoch, test_results_epoch], axis=1)
+        final_results_epoch.insert(0, "ID", i)
+        final_results_epoch.insert(1, "Model", model_name)
+        
+        if os.path.exists("no_fed_metrics_epoch.csv"):
+            final_results_epoch.to_csv("no_fed_metrics_epoch.csv", mode="a", header=False, index=False)
+        else:
+            final_results_epoch.to_csv("no_fed_metrics_epoch.csv", mode="a", header=True, index=False)
 
