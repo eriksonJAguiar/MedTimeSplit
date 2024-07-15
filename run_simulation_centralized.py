@@ -1,5 +1,5 @@
 from fl_strategy import centralized
-from utils import utils
+from utils import utils, partitioning
 import torch
 import os
 import time
@@ -19,7 +19,6 @@ model_names = ["resnet50", "vgg16", "vgg19", "inceptionv3", "densenet", "efficie
 lr = 0.001
 epochs = 50
 iterations = 10
-
 
 for i in range(iterations):
     for model_name in model_names:        

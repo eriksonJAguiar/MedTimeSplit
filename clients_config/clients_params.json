@@ -1,0 +1,16 @@
+{
+    "0": {
+        "mean": 0,
+        "sigma": 0.1,
+        "brightness": 10,
+        "contrast": 1.4,
+        "occlusion_size": 8
+    },
+    "1": {
+        "mean": 0,
+        "sigma": 0.1,
+        "brightness": 10,
+        "contrast": 1.4,
+        "occlusion_size": 8
+    }
+}
