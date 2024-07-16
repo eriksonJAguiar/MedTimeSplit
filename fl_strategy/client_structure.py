@@ -37,11 +37,11 @@ class MedicalClient(flwr.client.NumPyClient):
     def fit(self, parameters, config):
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
-        loss, metrics = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
+        loss, metrics, metrics_epochs_train = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
         return self.get_parameters(self.model), len(self.train_loader), metrics
 
     def evaluate(self, parameters, config):
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
-        test_loss, metrics_test = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
+        test_loss, metrics_test,  metrics_epochs_test = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
         return float(test_loss), len(self.test_loader), metrics_test

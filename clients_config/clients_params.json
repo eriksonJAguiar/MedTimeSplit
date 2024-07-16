@@ -1,16 +1,37 @@
 {
     "0": {
         "mean": 0,
-        "sigma": 0.1,
+        "sigma": 10,
         "brightness": 10,
         "contrast": 1.4,
-        "occlusion_size": 8
+        "occlusion_size": 4
     },
     "1": {
-        "mean": 0,
-        "sigma": 0.1,
-        "brightness": 10,
-        "contrast": 1.4,
+        "mean": 0.3,
+        "sigma": 15,
+        "brightness": 15,
+        "contrast": 1.7,
         "occlusion_size": 8
+    },
+    "2": {
+        "mean": 0.5,
+        "sigma": 20,
+        "brightness": 20,
+        "contrast": 1.8,
+        "occlusion_size": 2
+    },
+    "3": {
+        "mean": 0.5,
+        "sigma": 30,
+        "brightness": 12,
+        "contrast": 1.5,
+        "occlusion_size": 12
+    },
+    "4": {
+        "mean": 0,
+        "sigma": 50,
+        "brightness": 15,
+        "contrast": 1.6,
+        "occlusion_size": 15
     }
 }
