@@ -3,7 +3,7 @@ Module to train and test models centralized
 """
 import torch
 from torchmetrics.classification import Accuracy, Recall, Specificity, Precision, F1Score, AUROC
-import pandas as pd
+from utils.metrics import BalancendAccuracy, Bias, Prevalence
 
 #from torch.utils.tensorboard import SummaryWriter
 #writer = SummaryWriter()
@@ -36,7 +36,10 @@ def train(model, train_loader, epochs, lr, num_class):
     train_precision = Precision(task="binary").to(device) if not num_class > 2 else Precision(task="multiclass", num_classes=num_class, average="weighted").to(device)
     train_f1 = F1Score(task="binary").to(device) if not num_class > 2 else F1Score(task="multiclass", num_classes=num_class, average="weighted").to(device)
     train_auc = AUROC(task="binary").to(device) if not num_class> 2 else AUROC(task="multiclass", num_classes=num_class, average="weighted").to(device)
-
+    train_balanced_acc = BalancendAccuracy(task="binary").to(device) if not num_class> 2 else BalancendAccuracy(task="multiclass", num_classes=num_class).to(device)
+    train_prevalence = Prevalence(task="binary").to(device) if not num_class> 2 else Prevalence(task="multiclass", num_classes=num_class).to(device)
+    train_bias = Bias(task="binary").to(device) if not num_class> 2 else Bias(task="multiclass", num_classes=num_class).to(device)
+    
     #writer = SummaryWriter()
     metrics_epochs_train  = []
     
@@ -64,6 +67,10 @@ def train(model, train_loader, epochs, lr, num_class):
             train_specificity(y_pred, y)
             train_f1(y_pred, y)
             train_auc(probs, y)
+            train_balanced_acc(y_pred, y)
+            train_prevalence(y_pred, y)
+            train_bias(y_pred, y)
+            
             
             # writer.add_scalar("loss x epoch", running_loss/len(train_loader), e)
             # writer.add_scalar("accuracy x epoch", train_accuracy.compute(), e)
@@ -76,22 +83,28 @@ def train(model, train_loader, epochs, lr, num_class):
         epochs_metrics  = {"epoch": e,
                            "loss": running_loss/len(train_loader),
                            "accuracy": train_accuracy.compute().item(),
+                           "balanced_acc": train_balanced_acc.compute().item(),
                            "precision": train_precision.compute().item(),
                            "recall": train_precision.compute().item(),
                            "specificity": train_specificity.compute().item(),
                            "f1_score": train_f1.compute().item(),
                            "auc": train_auc.compute().item(),
+                           "prevalance": train_prevalence.compute().item(),
+                           "bias": train_bias.compute().item(),
                         }
         metrics_epochs_train.append(epochs_metrics)
         
         #writer.close()
     
     metrics = {"accuracy": train_accuracy.compute().item(),
+               "balanced_acc": train_balanced_acc.compute().item(),
                "precision": train_precision.compute().item(),
                "recall": train_precision.compute().item(),
                "specificity": train_specificity.compute().item(),
                "f1_score": train_f1.compute().item(),
                "auc": train_auc.compute().item(),
+               "prevalance": train_prevalence.compute().item(),
+               "bias": train_bias.compute().item(),
             }
     
     loss_val = loss_val/total
@@ -121,6 +134,9 @@ def test(model, test_loader, epochs, num_class):
     test_precision = Precision(task="binary").to(device) if not num_class > 2 else Precision(task="multiclass", num_classes=num_class, average="weighted").to(device)
     test_f1 = F1Score(task="binary").to(device) if not num_class > 2 else F1Score(task="multiclass", num_classes=num_class, average="weighted").to(device)
     test_auc = AUROC(task="binary").to(device) if not num_class> 2 else AUROC(task="multiclass", num_classes=num_class, average="weighted").to(device)
+    test_balanced_acc = BalancendAccuracy(task="binary").to(device) if not num_class> 2 else BalancendAccuracy(task="multiclass", num_classes=num_class).to(device)
+    test_prevalence = Prevalence(task="binary").to(device) if not num_class> 2 else Prevalence(task="multiclass", num_classes=num_class).to(device)
+    test_bias = Bias(task="binary").to(device) if not num_class> 2 else Bias(task="multiclass", num_classes=num_class).to(device)
     
     #writer = SummaryWriter()
     metrics_epochs_test = []
@@ -148,6 +164,9 @@ def test(model, test_loader, epochs, num_class):
                 test_specificity(y_pred, y)
                 test_f1(y_pred, y)
                 test_auc(probs, y)
+                test_balanced_acc(y_pred, y)
+                test_prevalence(y_pred, y)
+                test_bias(y_pred, y)
                 
         #         writer.add_scalar("test loss x epoch", running_loss/len(test_loader), e)
         #         writer.add_scalar("test accuracy x epoch", test_accuracy.compute(), e)
@@ -161,11 +180,14 @@ def test(model, test_loader, epochs, num_class):
                         "val_epoch": e,
                         "val_loss": running_loss/len(test_loader),
                         "val_accuracy": test_accuracy.compute().item(),
+                        "val_balanced_acc": test_balanced_acc.compute().item(),
                         "val_precision": test_precision.compute().item(),
                         "val_recall": test_precision.compute().item(),
                         "val_specificity": test_specificity.compute().item(),
                         "val_f1_score": test_f1.compute().item(),
                         "val_auc": test_auc.compute().item(),
+                        "val_prevalance": test_prevalence.compute().item(),
+                        "va_bias": test_bias.compute().item(),
                     }
                 
             metrics_epochs_test.append(epoch_metrics)
@@ -173,11 +195,14 @@ def test(model, test_loader, epochs, num_class):
         # writer.close()
     
     metrics = {"val_accuracy": test_accuracy.compute().item(),
+               "val_balanced_acc": test_balanced_acc.compute().item(),
                "val_precision": test_precision.compute().item(),
                "val_recall": test_precision.compute().item(),
                "val_specificity": test_specificity.compute().item(),
                "val_f1_score": test_f1.compute().item(),
                "val_auc": test_auc.compute().item(),
+               "val_prevalance": test_prevalence.compute().item(),
+               "val_bias": test_bias.compute().item(),
             }
     
     loss_val = loss_val/total
