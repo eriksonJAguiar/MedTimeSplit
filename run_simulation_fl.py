@@ -29,12 +29,12 @@ num_clients = len(hyper_params_clients.keys())
 
 
 train_paramters = partitioning.load_database_federated_non_iid(root_path=root_path,
-                                                                    csv_path=csv_path,
-                                                                    num_clients=num_clients,
-                                                                    batch_size=batch_size,
-                                                                    as_rgb=True,
-                                                                    image_size=image_size,
-                                                                    hyperparams_client=hyper_params_clients
+                                                                csv_path=csv_path,
+                                                                num_clients=num_clients,
+                                                                batch_size=batch_size,
+                                                                as_rgb=True,
+                                                                image_size=image_size,
+                                                                hyperparams_client=hyper_params_clients
                                                                 )
 
 results_fl = []
@@ -47,6 +47,7 @@ def weighted_average(metrics):
     spc = [num_examples * m["val_specificity"] for num_examples, m in metrics]
     f1 = [num_examples * m["val_f1_score"] for num_examples, m in metrics]
     auc = [num_examples * m["val_auc"] for num_examples, m in metrics]
+    auc = [num_examples * m["val_mcc"] for num_examples, m in metrics]
     
     examples = [num_examples for num_examples, _ in metrics]
     
@@ -57,20 +58,21 @@ def weighted_average(metrics):
             "val_specificity": sum(spc)/sum(examples),
             "val_f1_score": sum(f1)/sum(examples),
             "val_auc": sum(auc)/sum(examples),
+            "val_mcc": sum(auc)/sum(examples),
             }
 
     results_fl.append(results)
     
     return results
 
-strategy = flwr.server.strategy.FedAvg(
-    fraction_fit=1.0,
-    fraction_evaluate=0.5,
-    min_fit_clients=2,
-    min_evaluate_clients=2,
-    min_available_clients=2,
-    evaluate_metrics_aggregation_fn=weighted_average,
-)
+# strategy = flwr.server.strategy.FedAvg( 
+#     fraction_fit=1.0,
+#     fraction_evaluate=0.5,
+#     min_fit_clients=2,
+#     min_evaluate_clients=2,
+#     min_available_clients=2,
+#     evaluate_metrics_aggregation_fn=weighted_average
+# )
 
 
 def client_fn(cid):
@@ -91,9 +93,39 @@ def client_fn(cid):
                                     test_loader=test_loader[int(cid)], 
                                     lr=lr, 
                                     epoch=epochs,
-                                    num_class=num_class)
+                                    num_class=num_class,
+                                    metrics_file_name="clients_federated.csv")
     
     return client_features.to_client()
+
+
+class CustomFedAvg(flwr.server.strategy.FedAvg):
+    def configure_fit(self, server_round, parameters, client_manager):
+        # Create fit instructions with the round number included in the config
+        config = {"round": server_round}
+        fit_ins = flwr.common.FitIns(parameters, config)
+        
+        # Sample clients and return their fit instructions
+        clients = client_manager.sample(num_clients=self.min_fit_clients)
+        return [(client, fit_ins) for client in clients]
+    
+    def configure_evaluate(self, server_round, parameters, client_manager):
+        config = {"round": server_round}
+        evaluate_ins = flwr.common.EvaluateIns(parameters, config)
+        
+        # Sample clients and return their evaluate instructions
+        clients = client_manager.sample(num_clients=self.min_evaluate_clients)
+        return [(client, evaluate_ins) for client in clients]
+    
+
+strategy = CustomFedAvg( 
+    fraction_fit=1.0,
+    fraction_evaluate=0.5,
+    min_fit_clients=2,
+    min_evaluate_clients=2,
+    min_available_clients=2,
+    evaluate_metrics_aggregation_fn=weighted_average
+)
 
 
 flwr.simulation.start_simulation(
@@ -106,5 +138,5 @@ flwr.simulation.start_simulation(
 
 df_results = pd.DataFrame(results_fl)
 df_results.insert(0, "Round", range(len(df_results)))
-df_results.to_csv("federated_learning_results.csv", index=False)
+df_results.to_csv("federated_learning_results_agg.csv", index=False)
 print(df_results)

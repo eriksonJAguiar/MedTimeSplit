@@ -16,40 +16,38 @@ csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
 
 batch_size = 64
 model_names = ["resnet50", "vgg16", "vgg19", "inceptionv3", "densenet", "efficientnet"]
-#model_names = ["inceptionv3"]
 lr = 0.001
 epochs = 50
 iterations = 10
-result_file_name = "no_fed_iid_metrics.csv"
-result_file_name_epoch = "no_fed_iid_metrics_epoch.csv"
+result_file_name = "no_fed_metrics"
 
-with open("clients_config/clients_params.json", 'r') as f:
-    hyper_params_clients = json.load(f)
+# with open("clients_config/clients_params.json", 'r') as f:
+#     hyper_params_clients = json.load(f)
 
-num_clients = len(hyper_params_clients.keys())
+# num_clients = len(hyper_params_clients.keys())
 
-for i in range(num_clients):
+for i in range(iterations):
     for model_name in model_names:        
         
-        # train, test, num_class = utils.load_database_df(
-        #     root_path=root_path,
-        #     csv_path=csv_path,
-        #     batch_size=32, 
-        #     image_size=(299, 299) if model_name == "inceptionv3" else (256, 256),
-        #     is_agumentation=True,
-        #     as_rgb=True,
-        # )
-        dataset_params = partitioning.load_database_federated_non_iid(
+        train, test, num_class = utils.load_database_df(
             root_path=root_path,
             csv_path=csv_path,
-            batch_size=32, 
+            batch_size=batch_size, 
             image_size=(299, 299) if model_name == "inceptionv3" else (256, 256),
-            num_clients=num_clients,
-            hyperparams_client=hyper_params_clients,
+            is_agumentation=True,
             as_rgb=True,
         )
+        # dataset_params = partitioning.load_database_federated_non_iid(
+        #     root_path=root_path,
+        #     csv_path=csv_path,
+        #     batch_size=batch_size, 
+        #     image_size=(299, 299) if model_name == "inceptionv3" else (256, 256),
+        #     num_clients=num_clients,
+        #     hyperparams_client=hyper_params_clients,
+        #     as_rgb=True,
+        # )
         
-        model = utils.make_model_pretrained(model_name=model_name, num_class=dataset_params["num_class"])
+        model = utils.make_model_pretrained(model_name=model_name, num_class=num_class)
 
         print("=====================================================")
         print(f'========= ID: {i} ======================')
@@ -59,10 +57,10 @@ for i in range(num_clients):
         time_start_train  = time.time()
         print("===== Train Phase ==========")
         loss_train, train_metrics, train_metrics_epoch = centralized.train(model=model,
-                                                                           train_loader=dataset_params["train"][i],
+                                                                           train_loader=train,
                                                                            epochs=epochs,
                                                                            lr=lr,
-                                                                           num_class=dataset_params["num_class"])
+                                                                           num_class=num_class)
         time_end_train = time.time()
         time_train  = time_end_train - time_start_train
 
@@ -70,9 +68,9 @@ for i in range(num_clients):
         time_start_test  = time.time()
         print("===== Test Phase ==========")
         loss_test, test_metrics, test_metrics_epoch = centralized.test(model=model,
-                                                                        test_loader=dataset_params["test"][i],
+                                                                        test_loader=test,
                                                                         epochs=epochs,
-                                                                        num_class=dataset_params["num_class"])
+                                                                        num_class=num_class)
         time_end_test = time.time()
         test_train  = time_end_test - time_start_test
         
@@ -94,10 +92,10 @@ for i in range(num_clients):
         final_results.insert(1, "Model", model_name)
         print(final_results)
         
-        if os.path.exists(result_file_name):
-            final_results.to_csv(result_file_name, mode="a", header=False, index=False)
+        if os.path.exists(f"{result_file_name}.csv"):
+            final_results.to_csv(f"{result_file_name}.csv", mode="a", header=False, index=False)
         else:
-            final_results.to_csv(result_file_name, mode="a", header=True, index=False)
+            final_results.to_csv(f"{result_file_name}.csv", mode="a", header=True, index=False)
             
         train_results_epoch = pd.DataFrame(train_metrics_epoch)
         test_results_epoch = pd.DataFrame(test_metrics_epoch)
@@ -105,8 +103,8 @@ for i in range(num_clients):
         final_results_epoch.insert(0, "ID", i)
         final_results_epoch.insert(1, "Model", model_name)
         
-        if os.path.exists(result_file_name_epoch):
-            final_results_epoch.to_csv(result_file_name_epoch, mode="a", header=False, index=False)
+        if os.path.exists(f"{result_file_name}_epoch.csv"):
+            final_results_epoch.to_csv(f"{result_file_name}_epoch.csv", mode="a", header=False, index=False)
         else:
-            final_results_epoch.to_csv(result_file_name_epoch, mode="a", header=True, index=False)
+            final_results_epoch.to_csv(f"{result_file_name}_epoch.csv", mode="a", header=True, index=False)
 
