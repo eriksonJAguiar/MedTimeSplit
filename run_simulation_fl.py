@@ -1,4 +1,5 @@
 from fl_strategy.client_structure import MedicalClient
+from fl_strategy.server_structure import CustomFedAvg
 from utils import utils, partitioning
 import pandas as pd
 import flwr
@@ -19,7 +20,7 @@ image_size = (256, 256)
 model_name = "resnet50"
 lr = 0.001
 epochs = 50
-num_rounds = 10
+num_rounds = 100
 
 with open("clients_config/clients_params.json", 'r') as f:
     hyper_params_clients = json.load(f)
@@ -47,18 +48,20 @@ def weighted_average(metrics):
     spc = [num_examples * m["val_specificity"] for num_examples, m in metrics]
     f1 = [num_examples * m["val_f1_score"] for num_examples, m in metrics]
     auc = [num_examples * m["val_auc"] for num_examples, m in metrics]
-    auc = [num_examples * m["val_mcc"] for num_examples, m in metrics]
+    mcc = [num_examples * m["val_mcc"] for num_examples, m in metrics]
+    bal_acc = [num_examples * m["val_balanced_acc"] for num_examples, m in metrics]
     
     examples = [num_examples for num_examples, _ in metrics]
     
     results = {
             "val_accuracy": sum(acc)/ sum(examples),
+            "val_balanced_accuracy": sum(bal_acc)/ sum(examples),
             "val_precision": sum(pr)/sum(examples),
             "val_recall": sum(re)/sum(examples),
             "val_specificity": sum(spc)/sum(examples),
             "val_f1_score": sum(f1)/sum(examples),
             "val_auc": sum(auc)/sum(examples),
-            "val_mcc": sum(auc)/sum(examples),
+            "val_mcc": sum(mcc)/sum(examples),
             }
 
     results_fl.append(results)
@@ -98,25 +101,6 @@ def client_fn(cid):
     
     return client_features.to_client()
 
-
-class CustomFedAvg(flwr.server.strategy.FedAvg):
-    def configure_fit(self, server_round, parameters, client_manager):
-        # Create fit instructions with the round number included in the config
-        config = {"round": server_round}
-        fit_ins = flwr.common.FitIns(parameters, config)
-        
-        # Sample clients and return their fit instructions
-        clients = client_manager.sample(num_clients=self.min_fit_clients)
-        return [(client, fit_ins) for client in clients]
-    
-    def configure_evaluate(self, server_round, parameters, client_manager):
-        config = {"round": server_round}
-        evaluate_ins = flwr.common.EvaluateIns(parameters, config)
-        
-        # Sample clients and return their evaluate instructions
-        clients = client_manager.sample(num_clients=self.min_evaluate_clients)
-        return [(client, evaluate_ins) for client in clients]
-    
 
 strategy = CustomFedAvg( 
     fraction_fit=1.0,

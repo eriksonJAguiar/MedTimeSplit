@@ -2,8 +2,9 @@
 Module to train and test models centralized
 """
 import torch
-from torchmetrics.classification import Accuracy, Recall, Specificity, Precision, F1Score, AUROC, MatthewsCorrCoef
+from torchmetrics.classification import Accuracy, Recall, Specificity, Precision, F1Score, AUROC, MatthewsCorrCoef, CohenKappa
 from utils.metrics import BalancedAccuracy, Bias, Prevalence
+from kornia import losses
 
 #from torch.utils.tensorboard import SummaryWriter
 #writer = SummaryWriter()
@@ -26,7 +27,8 @@ def train(model, train_loader, epochs, lr, num_class):
         metrics (dict): performance metrics calculate during train
         metrics_epochs_train: perfomance metrics per epoch during train
     """
-    criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
+    #criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
+    criterion = losses.FocalLoss(alpha=1.0, gamma=5.0, reduction="mean")
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     total, loss_val = 0, 0.0
     
@@ -40,6 +42,7 @@ def train(model, train_loader, epochs, lr, num_class):
     #train_prevalence = Prevalence(task="binary").to(device) if not num_class> 2 else Prevalence(task="multiclass", num_classes=num_class).to(device)
     #train_bias = Bias(task="binary").to(device) if not num_class> 2 else Bias(task="multiclass", num_classes=num_class).to(device)
     train_mcc = MatthewsCorrCoef(task="binary").to(device) if not num_class> 2 else MatthewsCorrCoef(task="multiclass", num_classes=num_class).to(device)
+    train_kappa = CohenKappa(task="binary", ).to(device) if not num_class> 2 else CohenKappa(task="multiclass", num_classes=num_class).to(device)
     
     #writer = SummaryWriter()
     metrics_epochs_train  = []
@@ -69,7 +72,8 @@ def train(model, train_loader, epochs, lr, num_class):
             train_f1(y_pred, y)
             train_auc(probs, y)
             train_balanced_acc(y_pred, y)
-            train_mcc(y_pred, y)
+            train_mcc(probs, y)
+            train_kappa(y_pred, y)
             
             # writer.add_scalar("loss x epoch", running_loss/len(train_loader), e)
             # writer.add_scalar("accuracy x epoch", train_accuracy.compute(), e)
@@ -90,6 +94,7 @@ def train(model, train_loader, epochs, lr, num_class):
                            "f1_score": train_f1.compute().item(),
                            "auc": train_auc.compute().item(),
                            "mcc": train_mcc.compute().item(),
+                           "kappa": train_kappa.compute().item(),
                         }
         metrics_epochs_train.append(epochs_metrics)
         
@@ -104,6 +109,7 @@ def train(model, train_loader, epochs, lr, num_class):
                "f1_score": train_f1.compute().item(),
                "auc": train_auc.compute().item(),
                "mcc": train_mcc.compute().item(),
+               "kappa": train_kappa.compute().item(),
             }
     
     loss_val = loss_val/total
@@ -124,7 +130,8 @@ def test(model, test_loader, epochs, num_class):
         metrics (dict): performance metrics calculate during test
         metrics_epochs_test: perfomance metrics per epoch during test
     """
-    criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
+    #criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
+    criterion = losses.FocalLoss(alpha=1.0, gamma=2.0, reduction="mean")
     total, loss_val = 0, 0.0
     
     test_accuracy = Accuracy(task="binary").to(device) if not num_class > 2 else Accuracy(task="multiclass", num_classes=num_class, average='weighted').to(device)
@@ -137,6 +144,7 @@ def test(model, test_loader, epochs, num_class):
     #test_prevalence = Prevalence(task="binary").to(device) if not num_class> 2 else Prevalence(task="multiclass", num_classes=num_class).to(device)
     #test_bias = Bias(task="binary").to(device) if not num_class> 2 else Bias(task="multiclass", num_classes=num_class).to(device)
     test_mcc = MatthewsCorrCoef(task="binary").to(device) if not num_class> 2 else MatthewsCorrCoef(task="multiclass", num_classes=num_class).to(device)
+    test_kappa = CohenKappa(task="binary", ).to(device) if not num_class> 2 else CohenKappa(task="multiclass", num_classes=num_class).to(device)
     
     #writer = SummaryWriter()
     metrics_epochs_test = []
@@ -165,7 +173,8 @@ def test(model, test_loader, epochs, num_class):
                 test_f1(y_pred, y)
                 test_auc(probs, y)
                 test_balanced_acc(y_pred, y)
-                test_mcc(y_pred, y)
+                test_mcc(probs, y)
+                test_kappa(y_pred, y)
                 
         #         writer.add_scalar("test loss x epoch", running_loss/len(test_loader), e)
         #         writer.add_scalar("test accuracy x epoch", test_accuracy.compute(), e)
@@ -186,6 +195,7 @@ def test(model, test_loader, epochs, num_class):
                         "val_f1_score": test_f1.compute().item(),
                         "val_auc": test_auc.compute().item(),
                         "val_mcc": test_mcc.compute().item(),
+                        "val_kappa": test_kappa.compute().item(),
                     }
                 
             metrics_epochs_test.append(epoch_metrics)
@@ -201,6 +211,7 @@ def test(model, test_loader, epochs, num_class):
                "val_f1_score": test_f1.compute().item(),
                "val_auc": test_auc.compute().item(),
                "val_mcc": test_mcc.compute().item(),
+               "val_kappa": test_kappa.compute().item(),
             }
     
     loss_val = loss_val/total
