@@ -14,17 +14,13 @@ if device.type == "cuda":
 root_path = os.path.join("datasets", "MelanomaDB")
 csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
 
-batch_size = 64
-model_names = ["resnet50", "vgg16", "vgg19", "inceptionv3", "densenet", "efficientnet"]
-lr = 0.001
-epochs = 50
+batch_size = 32
+#model_names = ["resnet101", "resnet50", "vgg16", "vgg19", "inceptionv3", "densenet", "efficientnetb7"]
+model_names = ["resnet152", "resnet50", "vgg16", "vgg19", "alexnet", "efficientnetb7", "nasnetlarge", "inceptionresnet"]
+lr = 0.0001
+epochs = 100
 iterations = 10
 result_file_name = "no_fed_metrics"
-
-# with open("clients_config/clients_params.json", 'r') as f:
-#     hyper_params_clients = json.load(f)
-
-# num_clients = len(hyper_params_clients.keys())
 
 for i in range(iterations):
     for model_name in model_names:        
@@ -33,26 +29,18 @@ for i in range(iterations):
             root_path=root_path,
             csv_path=csv_path,
             batch_size=batch_size, 
-            image_size=(299, 299) if model_name == "inceptionv3" else (256, 256),
+            image_size=(299, 299) if model_name == "inceptionv3" else (224, 224),
             is_agumentation=True,
             as_rgb=True,
         )
-        # dataset_params = partitioning.load_database_federated_non_iid(
-        #     root_path=root_path,
-        #     csv_path=csv_path,
-        #     batch_size=batch_size, 
-        #     image_size=(299, 299) if model_name == "inceptionv3" else (256, 256),
-        #     num_clients=num_clients,
-        #     hyperparams_client=hyper_params_clients,
-        #     as_rgb=True,
-        # )
         
-        model = utils.make_model_pretrained(model_name=model_name, num_class=num_class)
 
         print("=====================================================")
         print(f'========= ID: {i} ======================')
         print(f'========= Model: {model_name} ======================')
         print("=====================================================")
+        
+        model = utils.make_model_pretrained(model_name=model_name, num_class=num_class)
         
         time_start_train  = time.time()
         print("===== Train Phase ==========")

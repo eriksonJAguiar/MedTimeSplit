@@ -27,9 +27,9 @@ def train(model, train_loader, epochs, lr, num_class):
         metrics (dict): performance metrics calculate during train
         metrics_epochs_train: perfomance metrics per epoch during train
     """
-    #criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
-    criterion = losses.FocalLoss(alpha=1.0, gamma=5.0, reduction="mean")
-    opt = torch.optim.Adam(model.parameters(), lr=lr)
+    criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
+    #criterion = losses.FocalLoss(alpha=1.0, gamma=5.0, reduction="mean")
+    opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0.0001)
     total, loss_val = 0, 0.0
     
     train_accuracy = Accuracy(task="binary").to(device) if not num_class > 2 else Accuracy(task="multiclass", num_classes=num_class, average='weighted').to(device)
@@ -130,8 +130,8 @@ def test(model, test_loader, epochs, num_class):
         metrics (dict): performance metrics calculate during test
         metrics_epochs_test: perfomance metrics per epoch during test
     """
-    #criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
-    criterion = losses.FocalLoss(alpha=1.0, gamma=2.0, reduction="mean")
+    criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
+    #criterion = losses.FocalLoss(alpha=1.0, gamma=2.0, reduction="mean")
     total, loss_val = 0, 0.0
     
     test_accuracy = Accuracy(task="binary").to(device) if not num_class > 2 else Accuracy(task="multiclass", num_classes=num_class, average='weighted').to(device)

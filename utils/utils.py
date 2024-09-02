@@ -8,6 +8,7 @@ import torch
 import os
 import cv2
 import torchvision
+import timm
 from sklearn.model_selection import train_test_split
 import torchvision.models as models
 import matplotlib.pyplot as plt
@@ -45,9 +46,12 @@ def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_a
                                     #transforms.AutoAugment(transforms.autoaugment.AutoAugmentPolicy.CIFAR10),
                                     transforms.RandomHorizontalFlip(),
                                     transforms.RandomVerticalFlip(),
+                                    transforms.RandomRotation(degrees=(20, 150)),
+                                    transforms.RandomCrop(size=(100,100)),
+                                    transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), shear=10),
                                     #transforms.RandomAffine(degrees=3, shear=0.01),
                                     #transforms.RandomResizedCrop(size=image_size, scale=(0.875, 1.0)),
-                                    #transforms.ColorJitter(brightness=(0.7, 1.5)),
+                                    transforms.ColorJitter(brightness=(0.7, 1.5)),
                                     transforms.ToTensor(),
                                     #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
                                     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -374,6 +378,40 @@ def make_model_pretrained(model_name, num_class):
                 torch.nn.Linear(224, out_features_model)
             )
            
+        elif model_name == "resnet101":
+            model = models.resnet101(weights=models.ResNet101_Weights.IMAGENET1K_V1)
+            
+            #self._freeze_layers(model, 5)
+            for param in model.parameters():
+                param.requires_grad = False
+            
+            model.fc = torch.nn.Sequential(
+                torch.nn.Linear(model.fc.in_features, 224),
+                torch.nn.BatchNorm1d(224),
+                torch.nn.ReLU(),
+                #torch.nn.Dropout(0.5),
+                #torch.nn.Linear(512, 128),
+                torch.nn.Dropout(0.5),
+                torch.nn.Linear(224, out_features_model)
+            )
+        
+        elif model_name == "resnet152":
+            model = models.resnet152(weights=models.ResNet152_Weights.IMAGENET1K_V1)
+            
+            #self._freeze_layers(model, 5)
+            for param in model.parameters():
+                param.requires_grad = False
+            
+            model.fc = torch.nn.Sequential(
+                torch.nn.Linear(model.fc.in_features, 224),
+                torch.nn.BatchNorm1d(224),
+                torch.nn.ReLU(),
+                #torch.nn.Dropout(0.5),
+                #torch.nn.Linear(512, 128),
+                torch.nn.Dropout(0.5),
+                torch.nn.Linear(224, out_features_model)
+            )
+        
         elif model_name == "resnet18":
             model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
         
@@ -464,8 +502,8 @@ def make_model_pretrained(model_name, num_class):
                 #torch.nn.Softmax(),
             )
 
-        elif model_name == "efficientnet":
-            model = models.efficientnet.efficientnet_b0(weights=models.EfficientNet_B0_Weights.IMAGENET1K_V1)
+        elif model_name == "efficientnetb7":
+            model = models.efficientnet.efficientnet_b7(weights=models.EfficientNet_B7_Weights.IMAGENET1K_V1)
             
             for param in model.parameters():
                 param.requires_grad = False
@@ -482,6 +520,58 @@ def make_model_pretrained(model_name, num_class):
                 #torch.nn.Softmax(),
             )
             #model.classifier[1] = nn.Linear(num_ftrs, out_features=out_features_model)
+        
+        elif model_name == "nasnetlarge":
+            model = timm.create_model('nasnetalarge', pretrained=True)
+            
+            for param in model.parameters():
+                param.requires_grad = False
+            
+            num_ftrs = model.last_linear.in_features
+            model.last_linear = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 128),
+                torch.nn.BatchNorm1d(128),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.5),
+                torch.nn.Linear(128, out_features_model),
+                #torch.nn.Softmax(),
+            )
+        
+        elif model_name == "alexnet":
+            model = models.alexnet(weights=models.AlexNet_Weights.IMAGENET1K_V1)
+            
+            for param in model.parameters():
+                param.requires_grad = False
+            
+            #self._freeze_layers(model, 10)
+            
+            num_ftrs = model.classifier[6].in_features
+            model.classifier[6] = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 128),
+                torch.nn.BatchNorm1d(128),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.5),
+                torch.nn.Linear(128, out_features_model),
+                #torch.nn.Softmax(),
+            )
+        
+        elif model_name == "inceptionresnet":
+            model = timm.create_model('inception_resnet_v2', pretrained=True)
+            
+            for param in model.parameters():
+                param.requires_grad = False
+            
+            # #self._freeze_layers(model, 10)
+            
+            num_ftrs = model.classif.in_features
+            model.classif = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 128),
+                torch.nn.BatchNorm1d(128),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.5),
+                torch.nn.Linear(128, out_features_model),
+                #torch.nn.Softmax(),
+            )
         
         else:
             print("Ivalid model name, exiting...")
@@ -637,6 +727,17 @@ def get_model_structure(model_name, nb_class):
     nb_class = nb_class if nb_class > 2 else 1
     if model_name == "resnet50":
         model = torchvision.models.resnet50()
+        num_ftrs = model.fc.in_features
+        model.fc = torch.nn.Sequential(
+                torch.nn.Linear(num_ftrs, 224),
+                torch.nn.BatchNorm1d(224),
+                torch.nn.ReLU(),
+                torch.nn.Dropout(0.5),
+                torch.nn.Linear(224, nb_class)
+        )
+    
+    elif model_name == "resnet101":
+        model = torchvision.models.resnet101()
         num_ftrs = model.fc.in_features
         model.fc = torch.nn.Sequential(
                 torch.nn.Linear(num_ftrs, 224),

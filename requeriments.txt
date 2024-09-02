@@ -9,3 +9,4 @@ torchmetrics
 pillow
 scikit-learn
 avalanche
+timm

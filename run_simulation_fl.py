@@ -122,5 +122,6 @@ flwr.simulation.start_simulation(
 
 df_results = pd.DataFrame(results_fl)
 df_results.insert(0, "Round", range(len(df_results)))
+df_results.insert(1, model_name, range(len(df_results)))
 df_results.to_csv("federated_learning_results_agg.csv", index=False)
 print(df_results)
