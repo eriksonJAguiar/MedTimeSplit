@@ -8,5 +8,7 @@ pandas
 torchmetrics
 pillow
 scikit-learn
-avalanche
 timm
+avalanche-lib
+kornia
+lightning

@@ -1,7 +1,6 @@
 from continual_learning.continual import run_continual
 from utils import utils
 import pandas as pd
-import numpy as np
 import os
 
 root_path = os.path.join(

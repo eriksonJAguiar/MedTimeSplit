@@ -1,6 +1,6 @@
 fl-env
 runs
-datasets
+dataset*
 __pycache__
 *.png
 *.jpg
@@ -8,3 +8,4 @@ __pycache__
 *.csv
 *.out
 MNIST/*
+no_fed_logs/*

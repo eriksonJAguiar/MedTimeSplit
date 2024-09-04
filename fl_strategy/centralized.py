@@ -5,6 +5,7 @@ import torch
 from torchmetrics.classification import Accuracy, Recall, Specificity, Precision, F1Score, AUROC, MatthewsCorrCoef, CohenKappa
 from utils.metrics import BalancedAccuracy, Bias, Prevalence
 from kornia import losses
+from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 
 #from torch.utils.tensorboard import SummaryWriter
 #writer = SummaryWriter()
@@ -27,9 +28,11 @@ def train(model, train_loader, epochs, lr, num_class):
         metrics (dict): performance metrics calculate during train
         metrics_epochs_train: perfomance metrics per epoch during train
     """
-    criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
-    #criterion = losses.FocalLoss(alpha=1.0, gamma=5.0, reduction="mean")
+    model = model.to(device)
+    #criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
+    criterion = losses.FocalLoss(alpha=1.0, gamma=5.0, reduction="mean")
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0.0001)
+    scheduler = ReduceLROnPlateau(opt, mode='min', factor=0.1, patience=10)
     total, loss_val = 0, 0.0
     
     train_accuracy = Accuracy(task="binary").to(device) if not num_class > 2 else Accuracy(task="multiclass", num_classes=num_class, average='weighted').to(device)
@@ -49,6 +52,7 @@ def train(model, train_loader, epochs, lr, num_class):
     
     for e in range(epochs):
         running_loss = 0
+        model.train()
         for data in train_loader:
             x, y  = data
             x, y = x.to(device), y.to(device)
@@ -97,8 +101,10 @@ def train(model, train_loader, epochs, lr, num_class):
                            "kappa": train_kappa.compute().item(),
                         }
         metrics_epochs_train.append(epochs_metrics)
+        print(epochs_metrics)
         
         #writer.close()
+        scheduler.step(loss_val)
     
     metrics = {
                "accuracy": train_accuracy.compute().item(),
@@ -130,8 +136,9 @@ def test(model, test_loader, epochs, num_class):
         metrics (dict): performance metrics calculate during test
         metrics_epochs_test: perfomance metrics per epoch during test
     """
-    criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
-    #criterion = losses.FocalLoss(alpha=1.0, gamma=2.0, reduction="mean")
+    model = model.to(device)
+    #criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
+    criterion = losses.FocalLoss(alpha=1.0, gamma=2.0, reduction="mean")
     total, loss_val = 0, 0.0
     
     test_accuracy = Accuracy(task="binary").to(device) if not num_class > 2 else Accuracy(task="multiclass", num_classes=num_class, average='weighted').to(device)
@@ -199,6 +206,7 @@ def test(model, test_loader, epochs, num_class):
                     }
                 
             metrics_epochs_test.append(epoch_metrics)
+            print(epoch_metrics)
         
         # writer.close()
     
