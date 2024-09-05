@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from fl_strategy import centralized
+from fl_strategy.centralized_lightning import TrainModelLigthning, CustomTimeCallback
 
 import pandas as pd
 import lightning as pl
@@ -72,13 +73,16 @@ class MedicalClientLightning(flwr.client.NumPyClient):
     """
     def __init__(self, cid, model, train_loader, test_loader, lr, epoch, num_class, metrics_file_name):
         self.cid = cid
-        self.model = model
         self.train_loader = train_loader 
         self.test_loader = test_loader 
+        self.model = model
         self.lr = lr 
         self.epochs = epoch
         self.num_class = num_class
         self.metrics_file_name = metrics_file_name
+        self.ligh_model = TrainModelLigthning(model_pretrained=self.model, 
+                                              num_class=self.num_class, 
+                                              lr=self.lr)
         
     def get_parameters(self, config):
         return get_parameters(self.model)
@@ -86,8 +90,20 @@ class MedicalClientLightning(flwr.client.NumPyClient):
     def fit(self, parameters, config):
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
-        trainer = pl.Trainer(max_epochs=self.max_epochs, enable_progress_bar=False)
-        trainer.fit(self.model, self.train_loader, self.val_loader)
+        
+        #logger = CSVLogger(save_dir=os.path.join(metrics_save_path,"logs", "hold-out"), name="{}-{}".format(model_name, database_name))
+        
+        trainer = pl.Trainer(
+            max_epochs= self.epochs,
+            accelerator="gpu",
+            devices="auto",
+            min_epochs=5,
+            log_every_n_steps=10,
+            deterministic=False,
+            enable_progress_bar=False,
+        )
+        
+        trainer.fit(self.ligh_model, self.train_loader, self.test_loader)
         
         metrics = trainer.logged_metrics
         
@@ -116,6 +132,18 @@ class MedicalClientLightning(flwr.client.NumPyClient):
     def evaluate(self, parameters, config):
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
+        
+        trainer = pl.Trainer(
+            max_epochs= self.epochs,
+            accelerator="gpu",
+            devices="auto",
+            min_epochs=5,
+            log_every_n_steps=10,
+            deterministic=False,
+            enable_progress_bar=False,
+        )
+        
+        trainer.fit(self.ligh_model, self.train_loader, self.test_loader)
         
         trainer = pl.Trainer(enable_progress_bar=False)
         results = trainer.test(self.model, self.test_loader)

@@ -5,7 +5,7 @@ import torch.optim as optim
 import lightning as L
 from torchmetrics.classification import Accuracy, Recall, Specificity, Precision, F1Score, AUROC, ConfusionMatrix, MatthewsCorrCoef, CohenKappa
 from utils.metrics import BalancedAccuracy
-import torchmetrics
+from kornia import losses
 from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
@@ -37,6 +37,7 @@ class TrainModelLigthning(L.LightningModule):
         self.lr = lr
         self.num_class = num_class
         self.criterion = torch.nn.CrossEntropyLoss() if self.num_class > 2 else torch.nn.BCEWithLogitsLoss()
+        #self.criterion = losses.FocalLoss(alpha=1.0, gamma=5.0, reduction="mean")
         #self.criterion = Loss(loss_type="focal_loss", fl_gamma=5)
         #self.criterion = Loss(loss_type="binary_cross_entropy")
         

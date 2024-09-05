@@ -14,11 +14,14 @@ if device.type == "cuda":
 
 root_path = os.path.join("dataset", "MelanomaDB")
 csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
+# root_path = os.path.join("dataset", "MelanomaDB20")
+# csv_path = os.path.join(root_path, "ISIC_2020_dataset.csv")
 
-batch_size = 32
+batch_size = 128
 #model_names = ["resnet101", "resnet50", "vgg16", "vgg19", "inceptionv3", "densenet", "efficientnetb7"]
+#pid - 1254912
 model_names = ["resnet152", "resnet50", "vgg16", "vgg19", "alexnet", "efficientnetb7", "nasnetlarge", "inceptionresnet"]
-lr = 0.001
+lr = 0.0001
 epochs = 100
 iterations = 10
 result_file_name = "no_fed_metrics"
@@ -47,7 +50,7 @@ for i in range(iterations):
             exp_num=i,
             model=model,
             model_name=model_name,
-            database_name="ISIC2019",
+            database_name="ISIC2020",
             train=train,
             test=test,
             learning_rate=lr,

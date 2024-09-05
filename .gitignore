@@ -9,3 +9,4 @@ __pycache__
 *.out
 MNIST/*
 no_fed_logs/*
+lightning_logs/*

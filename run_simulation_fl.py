@@ -1,4 +1,4 @@
-from fl_strategy.client_structure import MedicalClient
+from fl_strategy.client_structure import MedicalClient, MedicalClientLightning
 from fl_strategy.server_structure import CustomFedAvg
 from utils import utils, partitioning
 import pandas as pd
@@ -6,18 +6,24 @@ import flwr
 import torch
 import os
 import json
+import argparse
+
+
+parser = argparse.ArgumentParser(description='')
+parser.add_argument("-mn", "--model_name")
+args = vars(parser.parse_args())
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 client_resources = None
 if device.type == "cuda":
     client_resources = {"num_gpus": 1}
 
-root_path = os.path.join("datasets", "MelanomaDB")
+root_path = os.path.join("dataset", "MelanomaDB")
 csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
 
 batch_size = 64
 image_size = (256, 256)
-model_name = "resnet50"
+model_name = args["model_name"]
 lr = 0.001
 epochs = 50
 num_rounds = 100
@@ -68,15 +74,6 @@ def weighted_average(metrics):
     
     return results
 
-# strategy = flwr.server.strategy.FedAvg( 
-#     fraction_fit=1.0,
-#     fraction_evaluate=0.5,
-#     min_fit_clients=2,
-#     min_evaluate_clients=2,
-#     min_available_clients=2,
-#     evaluate_metrics_aggregation_fn=weighted_average
-# )
-
 
 def client_fn(cid):
     """read client features
@@ -90,14 +87,15 @@ def client_fn(cid):
 
     model = utils.make_model_pretrained(model_name=model_name, num_class=num_class)
     
-    client_features = MedicalClient(cid=cid,
-                                    model=model, 
-                                    train_loader=train_loader[int(cid)],
-                                    test_loader=test_loader[int(cid)], 
-                                    lr=lr, 
-                                    epoch=epochs,
-                                    num_class=num_class,
-                                    metrics_file_name="clients_federated.csv")
+    client_features = MedicalClientLightning(cid=cid,
+                                             model=model, 
+                                             train_loader=train_loader[int(cid)],
+                                             test_loader=test_loader[int(cid)], 
+                                             lr=lr, 
+                                             epoch=epochs,
+                                             num_class=num_class,
+                                             metrics_file_name="clients_federated.csv"
+                                            )
     
     return client_features.to_client()
 
@@ -123,5 +121,9 @@ flwr.simulation.start_simulation(
 df_results = pd.DataFrame(results_fl)
 df_results.insert(0, "Round", range(len(df_results)))
 df_results.insert(1, model_name, range(len(df_results)))
-df_results.to_csv("federated_learning_results_agg.csv", index=False)
 print(df_results)
+
+if not os.path.exists("federated_learning_results_agg.csv"):
+    df_results.to_csv("federated_learning_results_agg.csv", index=False, header=True, mode="a")
+else:
+    df_results.to_csv("federated_learning_results_agg.csv", index=False, header=False, mode="a")

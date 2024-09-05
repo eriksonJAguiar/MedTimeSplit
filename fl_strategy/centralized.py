@@ -3,7 +3,7 @@ Module to train and test models centralized
 """
 import torch
 from torchmetrics.classification import Accuracy, Recall, Specificity, Precision, F1Score, AUROC, MatthewsCorrCoef, CohenKappa
-from utils.metrics import BalancedAccuracy, Bias, Prevalence
+from utils.metrics import BalancedAccuracy
 from kornia import losses
 from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 
@@ -29,8 +29,8 @@ def train(model, train_loader, epochs, lr, num_class):
         metrics_epochs_train: perfomance metrics per epoch during train
     """
     model = model.to(device)
-    #criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
-    criterion = losses.FocalLoss(alpha=1.0, gamma=5.0, reduction="mean")
+    criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
+    #criterion = losses.FocalLoss(alpha=1.0, gamma=5.0, reduction="mean")
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=0.0001)
     scheduler = ReduceLROnPlateau(opt, mode='min', factor=0.1, patience=10)
     total, loss_val = 0, 0.0
@@ -137,8 +137,8 @@ def test(model, test_loader, epochs, num_class):
         metrics_epochs_test: perfomance metrics per epoch during test
     """
     model = model.to(device)
-    #criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
-    criterion = losses.FocalLoss(alpha=1.0, gamma=2.0, reduction="mean")
+    criterion = torch.nn.CrossEntropyLoss() if num_class > 2 else torch.nn.BCEWithLogitsLoss()
+    #criterion = losses.FocalLoss(alpha=1.0, gamma=2.0, reduction="mean")
     total, loss_val = 0, 0.0
     
     test_accuracy = Accuracy(task="binary").to(device) if not num_class > 2 else Accuracy(task="multiclass", num_classes=num_class, average='weighted').to(device)
