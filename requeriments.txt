@@ -1,4 +1,3 @@
-flwr[simulation]
 numpy
 opencv-python
 torch
@@ -9,6 +8,5 @@ torchmetrics
 pillow
 scikit-learn
 timm
+flwr[simulation]
 avalanche-lib
-kornia
-lightning

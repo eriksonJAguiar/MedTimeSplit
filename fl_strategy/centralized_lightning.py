@@ -5,7 +5,6 @@ import torch.optim as optim
 import lightning as L
 from torchmetrics.classification import Accuracy, Recall, Specificity, Precision, F1Score, AUROC, ConfusionMatrix, MatthewsCorrCoef, CohenKappa
 from utils.metrics import BalancedAccuracy
-from kornia import losses
 from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
@@ -198,6 +197,8 @@ class TrainModelLigthning(L.LightningModule):
         #scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=miletones, gamma=0.1)
         #scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.3, total_iters=10)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10)
+        
+        #return [optimizer]
         
         return {
             'optimizer': optimizer,

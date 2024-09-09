@@ -4,7 +4,8 @@ from avalanche.models import MultiHeadClassifier
 from avalanche.models import SimpleCNN
 from avalanche.models import as_multitask
 from avalanche.benchmarks.datasets import FashionMNIST, MNIST
-from avalanche.benchmarks.generators import nc_benchmark, ni_benchmark
+from avalanche.benchmarks import nc_benchmark, ni_benchmark
+from avalanche.benchmarks.utils import AvalancheDataset
 import torch
 import torchvision
 import os
@@ -52,14 +53,30 @@ device = torch.device(
 
 print(f"Device: {device}")
 
-def run_continual(train, test, num_class, model_name, lr=0.001,train_epochs=10, experiences=5):
 
+def partition_dataset_by_classes(dataset, num_experiences, classes_per_experience):
+    """Partition the dataset into experiences with specific class subsets."""
+    classes = torch.unique(torch.tensor(dataset.targets)).tolist()  # Get all classes
+    class_partitions = [
+        classes[i:i + classes_per_experience] for i in range(0, len(classes), classes_per_experience)
+    ]
+    
+    datasets_per_experience = []
+    for class_subset in class_partitions:
+        indices = [i for i, target in enumerate(dataset.targets) if target in class_subset]
+        subset = torch.utils.data.Subset(dataset, indices)
+        datasets_per_experience.append(subset)
+    
+    return datasets_per_experience
+
+def run_continual(train, test, num_class, model_name, lr=0.001, train_epochs=10, experiences=5):
+        
     benchmark = ni_benchmark(
         train_dataset=train, 
         test_dataset=test,
         n_experiences=experiences, 
         task_labels=False,
-        balance_experiences=True,
+        shuffle=True
     )
     
     # benchmark = nc_benchmark(
@@ -119,10 +136,15 @@ def run_continual(train, test, num_class, model_name, lr=0.001,train_epochs=10, 
     #     device=device
     # )
     
+    for experience in benchmark.train_stream:
+        print(f"Experience {experience.current_experience} has {len(experience.classes_in_this_experience)} classes")
+        print(f"Classes in this experience: {experience.classes_in_this_experience}")
+    
     results = []
     print('Starting experiment...')
     print("Training...")
     for experience in benchmark.train_stream:
+        print(experience)
         print("Start of experience ", experience.current_experience)
         # experiences have an ID that denotes its position in the stream
         # this is used only for logging (don't rely on it for training!)

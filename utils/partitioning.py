@@ -11,6 +11,8 @@ import torchvision
 from sklearn.model_selection import train_test_split
 import torchvision.models as models
 import matplotlib.pyplot as plt
+from torch.utils.data import ConcatDataset
+from avalanche.benchmarks.utils import AvalancheDataset, concat_datasets
 
 
 #device for GPU or CPU
@@ -21,7 +23,7 @@ RANDOM_SEED = 43
 torch.manual_seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 
-def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_agumentation=False, test_size=None, as_rgb=False, is_stream=False, domain_type=None):
+def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_agumentation=False, test_size=None, as_rgb=False, is_stream=False, tf_transformer=None):
     """load images from csv and split into train and testing resulting train and test dataloader
 
     Args:
@@ -39,30 +41,36 @@ def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_a
         test_loader (torch.utils.data.Dataloader): images dataloader for testing
         num_class (int): number of classes in the dataset
     """
-    if is_agumentation:
-        tf_image = transforms.Compose([#transforms.ToPILImage(),
-                                    transforms.Resize(image_size),
-                                    #transforms.AutoAugment(transforms.autoaugment.AutoAugmentPolicy.CIFAR10),
-                                    transforms.RandomHorizontalFlip(),
-                                    transforms.RandomVerticalFlip(),
-                                    #transforms.RandomAffine(degrees=3, shear=0.01),
-                                    #transforms.RandomResizedCrop(size=image_size, scale=(0.875, 1.0)),
-                                    #transforms.ColorJitter(brightness=(0.7, 1.5)),
-                                    transforms.ToTensor(),
-                                    #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-                                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                                ])
+    if tf_transformer is None:
+        if is_agumentation:
+            tf_image = transforms.Compose([#transforms.ToPILImage(),
+                                        transforms.Resize(image_size),
+                                        #transforms.AutoAugment(transforms.autoaugment.AutoAugmentPolicy.CIFAR10),
+                                        transforms.RandomHorizontalFlip(),
+                                        transforms.RandomVerticalFlip(),
+                                        transforms.RandomRotation(degrees=(20, 150)),
+                                        transforms.RandomCrop(size=(100,100)),
+                                        transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), shear=10),
+                                        #transforms.RandomAffine(degrees=3, shear=0.01),
+                                        #transforms.RandomResizedCrop(size=image_size, scale=(0.875, 1.0)),
+                                        transforms.ColorJitter(brightness=(0.7, 1.5)),
+                                        transforms.ToTensor(),
+                                        #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                                    ])
+        else:
+            tf_image = transforms.Compose([
+                transforms.Resize(image_size),
+                transforms.ToTensor(),
+                #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
     else:
-        tf_image = transforms.Compose([
-            transforms.Resize(image_size),
-            transforms.ToTensor(),
-            #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+        tf_image = tf_transformer
         
     if test_size is None:
-        train = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, task="Train", as_rgb=as_rgb, domain_type=domain_type)
-        test = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, task="Test", as_rgb=as_rgb, domain_type=domain_type)
+        train = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, task="Train", as_rgb=as_rgb)
+        test = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, task="Test", as_rgb=as_rgb)
         num_class = len(train.cl_name.values())
             
         print(train.cl_name)
@@ -121,9 +129,12 @@ def load_database_hold_out(root_path, csv_path, batch_size, image_size=(128,128)
                                     #transforms.AutoAugment(transforms.autoaugment.AutoAugmentPolicy.CIFAR10),
                                     transforms.RandomHorizontalFlip(),
                                     transforms.RandomVerticalFlip(),
+                                    transforms.RandomRotation(degrees=(20, 150)),
+                                    transforms.RandomCrop(size=(100,100)),
+                                    transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), shear=10),
                                     #transforms.RandomAffine(degrees=3, shear=0.01),
                                     #transforms.RandomResizedCrop(size=image_size, scale=(0.875, 1.0)),
-                                    #transforms.ColorJitter(brightness=(0.7, 1.5)),
+                                    transforms.ColorJitter(brightness=(0.7, 1.5)),
                                     transforms.ToTensor(),
                                     #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
                                     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -173,81 +184,112 @@ def load_database_hold_out(root_path, csv_path, batch_size, image_size=(128,128)
 
     return train_loader, test_loader, num_class
 
-def split_database_continous(root_path, csv_path, batch_size, image_size=(128,128), is_agumentation=False, test_size=None, as_rgb=False, domain_type=None, task=None):
-    """load images from csv and split into train and testing resulting train and test dataloader
+def load_database_federated_continous(root_path, csv_path, batch_size, hyperparams_client, image_size=(128,128), test_size=None, as_rgb=False, K=5):
+    """load images from csv and partition into train and testing based on temporal strategy resulting train and test dataloader
 
     Args:
         root_path (str): root path is located images
         csv_path (str): path of csv file to get images.
         batch_size (int): number of batch in training and test
+        hyperparams_client(dict): patients features related to domains
         image_size (tuple, optional): _description_. Defaults to (128,128).
-        is_agumentation (bool, optional): if is True, we use augmentation in dataset. Defaults to False.
         test_size (float, optional): if is not None, you should set up a float number that indicates partication will be split to train. 0.1 indicates 10% of test set. Defaults to None.
         as_rgb (bool, optional): if is True is a colored image. Defaults to False.
-        domain_type (str, optional): if is stream,
+        K (int, optional). Defaults to 5. The number of d
     Returns:
         train_loader (torch.utils.data.Dataloader): images dataloader for training
         test_loader (torch.utils.data.Dataloader): images dataloader for testing
         num_class (int): number of classes in the dataset
     """
-    if is_agumentation:
-        tf_image = transforms.Compose([#transforms.ToPILImage(),
-                                    transforms.Resize(image_size),
-                                    #transforms.AutoAugment(transforms.autoaugment.AutoAugmentPolicy.CIFAR10),
-                                    transforms.RandomHorizontalFlip(),
-                                    transforms.RandomVerticalFlip(),
-                                    #transforms.RandomAffine(degrees=3, shear=0.01),
-                                    #transforms.RandomResizedCrop(size=image_size, scale=(0.875, 1.0)),
-                                    #transforms.ColorJitter(brightness=(0.7, 1.5)),
-                                    transforms.ToTensor(),
-                                    #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-                                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                                ])
-    else:
-        tf_image = transforms.Compose([
-            transforms.Resize(image_size),
-            transforms.ToTensor(),
-            #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
     
-    train_samples, test_samples = None
-    if test_size is None:
-        train_samples = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, task="Train", as_rgb=as_rgb, domain_type=domain_type)
-        test_samples = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, task="Test", as_rgb=as_rgb, domain_type=domain_type)
-        num_class = len(train.cl_name.values())
-            
-        print(train.cl_name)
-        
-        #if is_stream:
-        #    return train, test, num_class
-            
-        #train_loader = DataLoader(train, batch_size=batch_size, num_workers=4, shuffle=True)
-        #test_loader = DataLoader(test, batch_size=batch_size, num_workers=4, shuffle=False)
-    else:
-        data = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, as_rgb=as_rgb)
-            
-        print({k: cl for k, cl in enumerate(data.cl_name)})
-            
-        train, test = train_test_split(list(range(len(data))), test_size=test_size, shuffle=True, random_state=RANDOM_SEED)
-            
-        # index_num = int(np.floor(0.1*len(test)))
-        # test_index = test[:len(test)-index_num]
-            
-        test_samples = SubsetRandomSampler(train)
-        test_samples = SubsetRandomSampler(test)
-            
-        num_class = len(data.cl_name.values())
-        
-        #if is_stream:
-        #    return train_sampler, test_sampler, num_class
-            
-        #train_loader = DataLoader(data, batch_size=batch_size, sampler=train_sampler, num_workers=4)
-        #test_loader = DataLoader(data, batch_size=batch_size, sampler=test_sampler, num_workers=4)
-            
-        #print(Counter(train_loader.dataset))
+    #1st variable to save data partitions 
+    # train_clients = []
+    # test_clients  = []
+    # train_split = None
+    # test_split = None
+    train_clients = []
+    test_clients  = []
+    
+    #2nd read csv file with values 
+    csv_data = pd.read_csv(csv_path)
 
-    return test_samples, test_samples, num_class
+    if test_size is None:
+        train_csv = csv_data[csv_data["Task"] == "Train"]
+        test_csv = csv_data[csv_data["Task"] == "Test"]
+    
+        train_csv = train_csv.sample(frac=1.0, replace=False, random_state=RANDOM_SEED).reset_index(drop=True)
+        test_csv = test_csv.sample(frac=1.0, replace=False, random_state=RANDOM_SEED).reset_index(drop=True)
+        
+    else:
+        shuffle_df = csv_data.sample(frac=1.0, replace=False, random_state=RANDOM_SEED).reset_index(drop=True)
+        train_size = int(len(csv_data) * (1-test_size))
+        train_csv = shuffle_df[:train_size]
+        test_csv = shuffle_df[train_size:]
+    
+    for cl in range(K):
+            print(f"Domain k: {cl}")
+            domain_j = {
+                "clean": transforms.Compose([
+                        transforms.Resize(image_size),
+                        transforms.ToTensor(),
+                        #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                ]),
+                "noise": transforms.Compose([
+                        transforms.Resize(image_size),
+                        CustomTransformNoise(mean=hyperparams_client[str(cl)]["mean"], sigma=hyperparams_client[str(cl)]["sigma"]),
+                        transforms.ToTensor(),
+                        #transforms.v2.GaussianNoise(mean=hyperparams_client[str(cl)]["mean"], sigma=hyperparams_client[str(cl)]["sigma"]),
+                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                ]),
+                "illumination": transforms.Compose([
+                        transforms.Resize(image_size),
+                        CustomTransformIllumination(brightness=hyperparams_client[str(cl)]["brightness"], contrast=hyperparams_client[str(cl)]["contrast"]),
+                        transforms.ToTensor(),
+                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                ]),
+                "occlusion": transforms.Compose([
+                        transforms.Resize(image_size),
+                        CustomTransformOcclusion(occlusion_size=hyperparams_client[str(cl)]["occlusion_size"]),
+                        transforms.ToTensor(),
+                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                ])
+            }
+            
+            #train_split = train_csv.sample(frac=1.0, replace=False).reset_index(drop=True)
+            #test_split = test_csv.sample(frac=1.0, replace=False).reset_index(drop=True)
+            
+            aval_train_clients = []
+            aval_test_clients = []
+            
+            for k, tf in domain_j.items():
+                #domain_k = domain_j[k]
+                train_cl = CustomDatasetContinous(path_root=root_path, csv_data=train_csv, tf_image=tf, as_rgb=as_rgb)
+                test_cl = CustomDatasetContinous(path_root=root_path, csv_data=train_csv, tf_image=tf, as_rgb=as_rgb)
+                num_class = len(train_cl.cl_name.values())
+                #print(f"Domain: {k}")
+                #print(train_cl.cl_name)
+                num_class = len(set(train_cl.cl_name.values()))
+                print(f"Classes in train_cl: {set(train_cl.cl_name.values())}")
+            
+                aval_train_clients.append(train_cl)
+                aval_test_clients.append(test_cl)
+                #train_clients[cl].append(train_cl)
+                #test_clients[cl].append(test_cl)
+            
+            #avl_ds_train = ConcatDataset(aval_train_clients)
+            #avl_ds_test = ConcatDataset(aval_test_clients)
+            
+            train_clients.append(aval_train_clients)
+            test_clients.append(aval_test_clients)
+            
+    # parameters = {
+    #         "train": train_clients,
+    #         "test": test_clients,
+    #         "num_class": num_class,
+    # }
+            
+    return train_clients, test_clients, num_class
 
 def load_database_federated(root_path, csv_path, batch_size, num_clients, image_size=(128,128), is_agumentation=False, test_size=None, as_rgb=False, is_stream=False):
     """load images from csv and split into train and test resulting partitions of clients on Federated learning
@@ -271,9 +313,12 @@ def load_database_federated(root_path, csv_path, batch_size, num_clients, image_
                                     #transforms.AutoAugment(transforms.autoaugment.AutoAugmentPolicy.CIFAR10),
                                     transforms.RandomHorizontalFlip(),
                                     transforms.RandomVerticalFlip(),
+                                    transforms.RandomRotation(degrees=(20, 150)),
+                                    transforms.RandomCrop(size=(100,100)),
+                                    transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), shear=10),
                                     #transforms.RandomAffine(degrees=3, shear=0.01),
                                     #transforms.RandomResizedCrop(size=image_size, scale=(0.875, 1.0)),
-                                    #transforms.ColorJitter(brightness=(0.7, 1.5)),
+                                    transforms.ColorJitter(brightness=(0.7, 1.5)),
                                     transforms.ToTensor(),
                                     #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
                                     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -378,6 +423,9 @@ def load_database_federated_non_iid(root_path, csv_path, batch_size, num_clients
 
         train_split = np.array_split(train_csv, num_clients)
         test_split = np.array_split(test_csv, num_clients)
+        #random sampling of clients and D^k domains
+        #train_split = [train_csv.sample(frac=1.0, replace=False).reset_index(drop=True) for _ in range(num_clients)]
+        #test_split =  [test_csv.sample(frac=1.0, replace=False).reset_index(drop=True) for _ in range(num_clients)]
         
     else:
         shuffle_df = csv_data.sample(frac=1.0, replace=False, random_state=RANDOM_SEED).reset_index(drop=True)
@@ -387,7 +435,10 @@ def load_database_federated_non_iid(root_path, csv_path, batch_size, num_clients
         
         train_split = np.array_split(train_csv, num_clients)
         test_split = np.array_split(test_csv, num_clients)
-        
+        #random sampling of clients and D^k domains
+        #train_split = [train_csv.sample(frac=1.0, replace=False).reset_index(drop=True) for _ in range(num_clients)]
+        #test_split =  [test_csv.sample(frac=1.0, replace=False).reset_index(drop=True) for _ in range(num_clients)]
+    
     for cl, (train, test) in enumerate(zip(train_split, test_split)):
             tf_image = {
                 "clean": transforms.Compose([
@@ -469,14 +520,13 @@ def generate_domain_no_iid(image, domain_type="clean"):
 class CustomDatasetFromCSV(Dataset):
     """Generating custom dataset for importing images from csv
     """    
-    def __init__(self, path_root, tf_image, csv_name, as_rgb=False, task=None, domain_type=None):
+    def __init__(self, path_root, tf_image, csv_name, as_rgb=False, task=None):
         table_data = pd.read_csv(csv_name)
         if task is not None:
             table_data.query("Task == @task", inplace=True)
         
         self.data = table_data["x"].tolist()
         self.targets = table_data["y"].tolist()
-        self.domain_type = domain_type
         
         self.as_rgb = as_rgb
         self.tf_image = tf_image
@@ -499,8 +549,6 @@ class CustomDatasetFromCSV(Dataset):
         y = self.targets[idx]
         
         X = Image.open(x_path).convert("RGB")
-        if self.domain_type is not None:
-            X  = generate_domain_no_iid(X, domain_type=self.domain_type)
         #X = cv2.cvtColor(cv2.imread(x_path), cv2.COLOR_BGR2RGB) if self.as_rgb else cv2.imread(x_path, cv2.IMREAD_GRAYSCALE)
  
         if self.tf_image:
@@ -536,14 +584,10 @@ class CustomDataset(Dataset):
 class CustomDatasetContinous(Dataset):
     """Generating custom dataset for importing images from csv
     """    
-    def __init__(self, path_root, tf_image, csv_name, as_rgb=False, task=None, domain_type=None):
-        table_data = pd.read_csv(csv_name)
-        if task is not None:
-            table_data.query("Task == @task", inplace=True)
+    def __init__(self, path_root, tf_image, csv_data, as_rgb=False):
         
-        self.data = table_data["x"].tolist()
-        self.targets = table_data["y"].tolist()
-        self.domain_type = domain_type
+        self.data = csv_data["x"].tolist()
+        self.targets = csv_data["y"].tolist()
         
         self.as_rgb = as_rgb
         self.tf_image = tf_image
@@ -566,10 +610,6 @@ class CustomDatasetContinous(Dataset):
         y = self.targets[idx]
         
         X = Image.open(x_path).convert("RGB")
-        if self.domain_type is not None:
-            X  = generate_domain_no_iid(X, domain_type=self.domain_type)
-        #X = cv2.cvtColor(cv2.imread(x_path), cv2.COLOR_BGR2RGB) if self.as_rgb else cv2.imread(x_path, cv2.IMREAD_GRAYSCALE)
- 
         if self.tf_image:
             X = self.tf_image(X)
         
@@ -601,6 +641,7 @@ class CustomDatasetFromCSVNonIID(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
         
+        #define the number of domains calculus to split into partitions 
         self.batch_counter = 0 if self.batch_counter == self.samples_per_domain else self.batch_counter
         self.current_domain = 0 if self.current_domain == 4 else self.current_domain
         

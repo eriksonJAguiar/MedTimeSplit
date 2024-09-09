@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from fl_strategy import centralized
-from fl_strategy.centralized_lightning import TrainModelLigthning, CustomTimeCallback
+#from fl_strategy.centralized_lightning import TrainModelLigthning, CustomTimeCallback
 
 import pandas as pd
 import lightning as pl
@@ -71,11 +71,12 @@ class MedicalClient(flwr.client.NumPyClient):
 class MedicalClientLightning(flwr.client.NumPyClient):
     """Flower client
     """
-    def __init__(self, cid, model, train_loader, test_loader, lr, epoch, num_class, metrics_file_name):
+    def __init__(self, cid, model, model_name, train_loader, test_loader, lr, epoch, num_class, metrics_file_name):
         self.cid = cid
         self.train_loader = train_loader 
         self.test_loader = test_loader 
         self.model = model
+        self.model_name = model_name
         self.lr = lr 
         self.epochs = epoch
         self.num_class = num_class
@@ -106,10 +107,12 @@ class MedicalClientLightning(flwr.client.NumPyClient):
         trainer.fit(self.ligh_model, self.train_loader, self.test_loader)
         
         metrics = trainer.logged_metrics
+        print(metrics)
         
         results =  {
                 "client": self.cid,
                 "round" : config.get("round", 0),
+                "model": self.model_name,
                 "train_acc" : metrics["acc"].item(),
                 "train_balanced_acc" : metrics["balanced_acc"].item(),
                 "train_f1-score": metrics["f1_score"].item(),
@@ -120,6 +123,16 @@ class MedicalClientLightning(flwr.client.NumPyClient):
                 "train_spc":  metrics["specificity"].item(),
                 "train_mcc": metrics["mcc"].item(),
                 "train_kappa": metrics["kappa"].item(),
+                "val_acc" : metrics["acc"].item(),
+                "val_balanced_acc" : metrics["balanced_acc"].item(),
+                "val_f1-score": metrics["f1_score"].item(),
+                "val_loss":  metrics["loss"].item(),
+                "val_precision":  metrics["precision"].item(),
+                "val_recall" :  metrics["recall"].item(),
+                "val_auc":  metrics["auc"].item(),
+                "Val_spc":  metrics["specificity"].item(),
+                "Val_mcc": metrics["mcc"].item(),
+                "val_kappa": metrics["kappa"].item(),
             }
         
         if not os.path.exists(f"train_{self.metrics_file_name}"):
@@ -134,25 +147,20 @@ class MedicalClientLightning(flwr.client.NumPyClient):
         print(f"[Client {self.cid}] fit, config: {config}")
         
         trainer = pl.Trainer(
-            max_epochs= self.epochs,
             accelerator="gpu",
             devices="auto",
-            min_epochs=5,
-            log_every_n_steps=10,
-            deterministic=False,
             enable_progress_bar=False,
         )
-        
-        trainer.fit(self.ligh_model, self.train_loader, self.test_loader)
-        
-        trainer = pl.Trainer(enable_progress_bar=False)
-        results = trainer.test(self.model, self.test_loader)
+    
+        results = trainer.test(self.ligh_model, self.test_loader)
         metrics = results[0]
         test_loss = metrics["test_loss"]
+        print(metrics)
         
         results =  {
                 "client": self.cid,
                 "round" : config.get("round", 0),
+                "model": self.model_name,
                 "test_acc" : metrics["test_acc"].item(),
                 "test_balanced_acc" : metrics["test_balanced_acc"].item(),
                 "test_f1-score": metrics["test_f1_score"].item(),

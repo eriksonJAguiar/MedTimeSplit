@@ -1,5 +1,5 @@
 from fl_strategy import centralized
-from utils import utils, partitioning
+from utils import utils, partitioning, non_iid_test
 from fl_strategy.centralized_lightning import PytorchTrainingAndTest
 import torch
 import os
@@ -16,6 +16,15 @@ root_path = os.path.join("dataset", "MelanomaDB")
 csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
 # root_path = os.path.join("dataset", "MelanomaDB20")
 # csv_path = os.path.join(root_path, "ISIC_2020_dataset.csv")
+
+
+# p_values = non_iid_test.load_dataset_with_non_iid_params(
+#     root_path=root_path,
+#     csv_path=csv_path,
+#     batch_size=32,
+#     image_size=(224,224),
+#     num_cli=3
+# )
 
 batch_size = 128
 #model_names = ["resnet101", "resnet50", "vgg16", "vgg19", "inceptionv3", "densenet", "efficientnetb7"]

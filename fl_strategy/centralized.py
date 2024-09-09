@@ -4,7 +4,6 @@ Module to train and test models centralized
 import torch
 from torchmetrics.classification import Accuracy, Recall, Specificity, Precision, F1Score, AUROC, MatthewsCorrCoef, CohenKappa
 from utils.metrics import BalancedAccuracy
-from kornia import losses
 from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 
 #from torch.utils.tensorboard import SummaryWriter

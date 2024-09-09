@@ -1,4 +1,4 @@
-from fl_strategy.client_structure import MedicalClient, MedicalClientLightning
+from fl_strategy.client_structure import MedicalClient
 from fl_strategy.server_structure import CustomFedAvg
 from utils import utils, partitioning
 import pandas as pd
@@ -22,9 +22,9 @@ root_path = os.path.join("dataset", "MelanomaDB")
 csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
 
 batch_size = 64
-image_size = (256, 256)
+image_size = (224, 224)
 model_name = args["model_name"]
-lr = 0.001
+lr = 0.0001
 epochs = 50
 num_rounds = 100
 
@@ -35,15 +35,27 @@ num_clients = len(hyper_params_clients.keys())
 #num_clients = 2
 
 
-train_paramters = partitioning.load_database_federated_non_iid(root_path=root_path,
+# train_paramters = partitioning.load_database_federated_non_iid(root_path=root_path,
+#                                                                 csv_path=csv_path,
+#                                                                 num_clients=num_clients,
+#                                                                 batch_size=batch_size,
+#                                                                 as_rgb=True,
+#                                                                 image_size=image_size,
+#                                                                 hyperparams_client=hyper_params_clients
+#                                                                 )
+
+train_paramters = partitioning.load_database_federated_continous(root_path=root_path,
                                                                 csv_path=csv_path,
-                                                                num_clients=num_clients,
+                                                                K=num_clients,
                                                                 batch_size=batch_size,
                                                                 as_rgb=True,
                                                                 image_size=image_size,
                                                                 hyperparams_client=hyper_params_clients
                                                                 )
 
+
+
+exit(0)
 results_fl = []
 
 def weighted_average(metrics):
@@ -88,7 +100,8 @@ def client_fn(cid):
     model = utils.make_model_pretrained(model_name=model_name, num_class=num_class)
     
     client_features = MedicalClientLightning(cid=cid,
-                                             model=model, 
+                                             model=model,
+                                             model_name=model_name, 
                                              train_loader=train_loader[int(cid)],
                                              test_loader=test_loader[int(cid)], 
                                              lr=lr, 
