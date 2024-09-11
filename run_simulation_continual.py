@@ -37,7 +37,9 @@ train, test, num_class = load_database_federated_continous(root_path=root_path,
 
 # print(train_paramters["train"])
 
-results_metrics = run_continual(train[0], test[0], num_class, model_name, lr, train_epochs=epoches, experiences=len(train[0]))
+print(len(train[0]))
+
+results_metrics = run_continual(train[0], test[0], num_class, model_name, lr, train_epochs=epoches, experiences=4)
 
 #for client in domain_type:
     

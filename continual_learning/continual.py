@@ -18,6 +18,9 @@ from avalanche.training.supervised import Naive
 from avalanche.training.supervised.strategy_wrappers_online import OnlineNaive
 from avalanche.training.plugins import EarlyStoppingPlugin
 
+from avalanche.benchmarks.scenarios.dataset_scenario import benchmark_from_datasets
+from avalanche.benchmarks.scenarios.online import split_online_stream
+
 from avalanche.evaluation.metrics import forgetting_metrics, \
 accuracy_metrics, class_accuracy_metrics, loss_metrics, timing_metrics, cpu_usage_metrics, \
 confusion_matrix_metrics, disk_usage_metrics, StreamClassAccuracy, StreamAccuracy, \
@@ -53,30 +56,23 @@ device = torch.device(
 
 print(f"Device: {device}")
 
-
-def partition_dataset_by_classes(dataset, num_experiences, classes_per_experience):
-    """Partition the dataset into experiences with specific class subsets."""
-    classes = torch.unique(torch.tensor(dataset.targets)).tolist()  # Get all classes
-    class_partitions = [
-        classes[i:i + classes_per_experience] for i in range(0, len(classes), classes_per_experience)
-    ]
-    
-    datasets_per_experience = []
-    for class_subset in class_partitions:
-        indices = [i for i, target in enumerate(dataset.targets) if target in class_subset]
-        subset = torch.utils.data.Subset(dataset, indices)
-        datasets_per_experience.append(subset)
-    
-    return datasets_per_experience
-
-def run_continual(train, test, num_class, model_name, lr=0.001, train_epochs=10, experiences=5):
+def run_continual(train, test, num_class, model_name, lr=0.001, train_epochs=10, experiences=4):
         
+    # benchmark = ni_benchmark(
+    #     train_dataset=train, 
+    #     test_dataset=test,
+    #     n_experiences=experiences, 
+    #     task_labels=False,
+    #     shuffle=True
+    # )
+    
     benchmark = ni_benchmark(
         train_dataset=train, 
         test_dataset=test,
         n_experiences=experiences, 
         task_labels=False,
-        shuffle=True
+        shuffle=True, 
+        balance_experiences=False
     )
     
     # benchmark = nc_benchmark(
@@ -87,6 +83,22 @@ def run_continual(train, test, num_class, model_name, lr=0.001, train_epochs=10,
     #     one_dataset_per_exp=True,
     #     #balance_experiences=True,
     # )
+    
+    train_stream_online = split_online_stream(
+        original_stream=benchmark.train_stream,
+        experience_size=len(train)//16,
+        drop_last=True
+    )
+    
+    test_stream_online = split_online_stream(
+        original_stream=benchmark.test_stream,
+        experience_size=len(train)//16,
+        drop_last=True
+    )
+    
+    # for experience in train_stream_online:
+    #     print(f"Experience {experience.current_experience} has {len(experience.dataset)} samples")
+        
 
     eval_plugin = EvaluationPlugin(
         accuracy_metrics(minibatch=True, epoch=True, experience=True, stream=True),
@@ -112,22 +124,23 @@ def run_continual(train, test, num_class, model_name, lr=0.001, train_epochs=10,
     model = utils.make_model_pretrained(model_name=model_name, num_class=num_class)
     optimizer = Adam(model.parameters(), lr=lr)
     criterion = CrossEntropyLoss()
-    cl_strategy = Naive(
-        model, optimizer, criterion,
-        train_mb_size=100, train_epochs=train_epochs, eval_mb_size=100,
-        plugins=[EarlyStoppingPlugin(patience=5, val_stream_name='train')],
-        evaluator=eval_plugin,
-        device=device
-    )
-    # cl_strategy = OnlineNaive(
+    # cl_strategy = Naive(
     #     model, optimizer, criterion,
-    #     train_mb_size=100, eval_mb_size=100,
-    #     train_passes=2,
-    #     eval_every= 1,
+    #     train_mb_size=100, train_epochs=train_epochs, eval_mb_size=100,
     #     plugins=[EarlyStoppingPlugin(patience=5, val_stream_name='train')],
     #     evaluator=eval_plugin,
     #     device=device
     # )
+    cl_strategy = OnlineNaive(
+        model, optimizer, criterion,
+        train_mb_size=100, eval_mb_size=100,
+        train_passes=2,
+        eval_every= 1,
+        plugins=[EarlyStoppingPlugin(patience=5, val_stream_name='train')],
+        evaluator=eval_plugin,
+        device=device
+        
+    )
     # cl_strategy = Cumulative(
     #     model, optimizer, criterion,
     #     train_mb_size=128, train_epochs=train_epochs, eval_mb_size=128,
@@ -135,24 +148,22 @@ def run_continual(train, test, num_class, model_name, lr=0.001, train_epochs=10,
     #     evaluator=eval_plugin,
     #     device=device
     # )
-    
-    for experience in benchmark.train_stream:
-        print(f"Experience {experience.current_experience} has {len(experience.classes_in_this_experience)} classes")
-        print(f"Classes in this experience: {experience.classes_in_this_experience}")
-    
+        
     results = []
     print('Starting experiment...')
     print("Training...")
-    for experience in benchmark.train_stream:
-        print(experience)
+    for experience, exp_test in zip(train_stream_online, test_stream_online):
         print("Start of experience ", experience.current_experience)
         # experiences have an ID that denotes its position in the stream
         # this is used only for logging (don't rely on it for training!)
         eid = experience.current_experience
         # for classification benchmarks, experiences have a list of classes in this experience
-        clss = experience.classes_in_this_experience
-        task = experience.task_label
-        print(f"EID={eid}, classes={clss}, task={task}")
+        #clss = experience.classes_in_this_experience
+        #print(experience.dataset)
+        #clss = [target for _, target in experience.dataset]
+        #task = experience.task_label
+        #print(f"EID={eid} classes={len(clss)} task={task}")
+        print(f"EID={eid}")
         # the experience provides a dataset
         print(f"data: {len(experience.dataset)} samples")
         
@@ -160,9 +171,10 @@ def run_continual(train, test, num_class, model_name, lr=0.001, train_epochs=10,
         print('Training completed')
         
         print('Computing accuracy on the whole test set')
-        metrics_performance = cl_strategy.eval(benchmark.test_stream)
+        metrics_performance = cl_strategy.eval(exp_test)
         
         keys = list(metrics_performance.keys())
+        print(keys)
         line = {}
         for i in range(len(keys)):
             keys_slice = keys[i].split("/")

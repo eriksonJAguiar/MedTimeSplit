@@ -227,7 +227,7 @@ def load_database_federated_continous(root_path, csv_path, batch_size, hyperpara
         test_csv = shuffle_df[train_size:]
     
     for cl in range(K):
-            print(f"Domain k: {cl}")
+            #print(f"Domain k: {cl}")
             domain_j = {
                 "clean": transforms.Compose([
                         transforms.Resize(image_size),
@@ -263,25 +263,20 @@ def load_database_federated_continous(root_path, csv_path, batch_size, hyperpara
             aval_test_clients = []
             
             for k, tf in domain_j.items():
-                #domain_k = domain_j[k]
                 train_cl = CustomDatasetContinous(path_root=root_path, csv_data=train_csv, tf_image=tf, as_rgb=as_rgb)
-                test_cl = CustomDatasetContinous(path_root=root_path, csv_data=train_csv, tf_image=tf, as_rgb=as_rgb)
+                test_cl = CustomDatasetContinous(path_root=root_path, csv_data=test_csv, tf_image=tf, as_rgb=as_rgb)
                 num_class = len(train_cl.cl_name.values())
-                #print(f"Domain: {k}")
-                #print(train_cl.cl_name)
+
                 num_class = len(set(train_cl.cl_name.values()))
-                print(f"Classes in train_cl: {set(train_cl.cl_name.values())}")
-            
+                #print(f"Classes in train_cl: {set(train_cl.cl_name.values())}")
+                
                 aval_train_clients.append(train_cl)
                 aval_test_clients.append(test_cl)
-                #train_clients[cl].append(train_cl)
-                #test_clients[cl].append(test_cl)
             
-            #avl_ds_train = ConcatDataset(aval_train_clients)
-            #avl_ds_test = ConcatDataset(aval_test_clients)
-            
-            train_clients.append(aval_train_clients)
-            test_clients.append(aval_test_clients)
+            avl_ds_train = ConcatDataset(aval_train_clients)
+            avl_ds_test = ConcatDataset(aval_test_clients)
+            train_clients.append(avl_ds_train)
+            test_clients.append(avl_ds_test)
             
     # parameters = {
     #         "train": train_clients,
@@ -614,6 +609,9 @@ class CustomDatasetContinous(Dataset):
             X = self.tf_image(X)
         
         return X, y
+
+    def get_targets(self):
+        return self.labels
 
 class CustomDatasetFromCSVNonIID(Dataset):
     """Generating custom dataset for importing images from csv
