@@ -1,16 +1,19 @@
-from fl_strategy.client_structure import MedicalClient
-from fl_strategy.server_structure import CustomFedAvg
+from fl_strategy.client_structure import MedicalClientLightning, MedicalClient
+from fl_strategy.server_structure import CustomFedAvg, CustomFedNova, CustomFedProx, CustomScaffold
 from utils import utils, partitioning
 import pandas as pd
+import numpy as np
 import flwr
 import torch
 import os
 import json
 import argparse
 
-
 parser = argparse.ArgumentParser(description='')
-parser.add_argument("-mn", "--model_name")
+parser.add_argument("-mn", "--model_name", required=True)
+parser.add_argument("-s", "--strategy", required=True, 
+                    help="you could to get the following methods: \
+                    FedAvg | FedProx | FedNova | FedScaffold")
 args = vars(parser.parse_args())
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -21,12 +24,12 @@ if device.type == "cuda":
 root_path = os.path.join("dataset", "MelanomaDB")
 csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
 
-batch_size = 64
+batch_size = 32
 image_size = (224, 224)
 model_name = args["model_name"]
 lr = 0.0001
-epochs = 50
-num_rounds = 100
+epochs = 10
+num_rounds = 50
 
 with open("clients_config/clients_params.json", 'r') as f:
     hyper_params_clients = json.load(f)
@@ -34,28 +37,15 @@ with open("clients_config/clients_params.json", 'r') as f:
 num_clients = len(hyper_params_clients.keys())
 #num_clients = 2
 
-
-# train_paramters = partitioning.load_database_federated_non_iid(root_path=root_path,
-#                                                                 csv_path=csv_path,
-#                                                                 num_clients=num_clients,
-#                                                                 batch_size=batch_size,
-#                                                                 as_rgb=True,
-#                                                                 image_size=image_size,
-#                                                                 hyperparams_client=hyper_params_clients
-#                                                                 )
-
-train_paramters = partitioning.load_database_federated_continous(root_path=root_path,
+train_paramters = partitioning.load_database_federated_non_iid(root_path=root_path,
                                                                 csv_path=csv_path,
-                                                                K=num_clients,
+                                                                num_clients=num_clients,
                                                                 batch_size=batch_size,
                                                                 as_rgb=True,
                                                                 image_size=image_size,
                                                                 hyperparams_client=hyper_params_clients
                                                                 )
 
-
-
-exit(0)
 results_fl = []
 
 def weighted_average(metrics):
@@ -80,12 +70,11 @@ def weighted_average(metrics):
             "val_f1_score": sum(f1)/sum(examples),
             "val_auc": sum(auc)/sum(examples),
             "val_mcc": sum(mcc)/sum(examples),
-            }
+        }
 
     results_fl.append(results)
     
     return results
-
 
 def client_fn(cid):
     """read client features
@@ -99,7 +88,7 @@ def client_fn(cid):
 
     model = utils.make_model_pretrained(model_name=model_name, num_class=num_class)
     
-    client_features = MedicalClientLightning(cid=cid,
+    client_features = MedicalClient(cid=cid,
                                              model=model,
                                              model_name=model_name, 
                                              train_loader=train_loader[int(cid)],
@@ -112,16 +101,48 @@ def client_fn(cid):
     
     return client_features.to_client()
 
+strategy_name = args["strategy"]
+strategy = None 
 
-strategy = CustomFedAvg( 
-    fraction_fit=1.0,
-    fraction_evaluate=0.5,
-    min_fit_clients=2,
-    min_evaluate_clients=2,
-    min_available_clients=2,
-    evaluate_metrics_aggregation_fn=weighted_average
-)
-
+if strategy_name == "FedAvg":
+    strategy = CustomFedAvg( 
+        fraction_fit=1.0,
+        fraction_evaluate=0.5,
+        min_fit_clients=2,
+        min_evaluate_clients=2,
+        min_available_clients=2,
+        evaluate_metrics_aggregation_fn=weighted_average
+    )
+elif strategy_name == "FedProx":
+    strategy = CustomFedProx(
+        fraction_fit=1.0,
+        fraction_evaluate=0.5,
+        min_fit_clients=2,
+        min_evaluate_clients=2,
+        min_available_clients=2,
+        evaluate_metrics_aggregation_fn=weighted_average,
+        proximal_mu=0.1
+    )
+elif strategy_name == "FedNova":
+    strategy = CustomFedNova(
+        fraction_fit=1.0,
+        fraction_evaluate=0.5,
+        min_fit_clients=2,
+        min_evaluate_clients=2,
+        min_available_clients=2,
+        evaluate_metrics_aggregation_fn=weighted_average
+    )
+elif strategy_name == "FedScaffold":
+    strategy = CustomScaffold(
+        fraction_fit=1.0,
+        fraction_evaluate=0.5,
+        min_fit_clients=2,
+        min_evaluate_clients=2,
+        min_available_clients=2,
+        evaluate_metrics_aggregation_fn=weighted_average
+    )
+else:
+    raise ValueError("strategy key is wrong")
 
 flwr.simulation.start_simulation(
     client_fn=client_fn,
@@ -133,7 +154,8 @@ flwr.simulation.start_simulation(
 
 df_results = pd.DataFrame(results_fl)
 df_results.insert(0, "Round", range(len(df_results)))
-df_results.insert(1, model_name, range(len(df_results)))
+df_results.insert(1, "Agg", np.repeat(strategy_name, len(df_results)))
+df_results.insert(2, "Model",  np.repeat(model_name, len(df_results)))
 print(df_results)
 
 if not os.path.exists("federated_learning_results_agg.csv"):

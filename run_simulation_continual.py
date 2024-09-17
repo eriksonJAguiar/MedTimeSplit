@@ -24,23 +24,19 @@ with open("clients_config/clients_params.json", 'r') as f:
 num_clients = len(hyper_params_clients.keys())
 
 train, test, num_class = load_database_federated_continous(root_path=root_path,
-                                                     csv_path=csv_path,
-                                                     K=num_clients,
-                                                     batch_size=batch_size,
-                                                     as_rgb=True,
-                                                     image_size=image_size,
-                                                     hyperparams_client=hyper_params_clients
-                                                    )
+                                                           csv_path=csv_path,
+                                                           K=num_clients,
+                                                           batch_size=batch_size,
+                                                           as_rgb=True,
+                                                           image_size=image_size,
+                                                           hyperparams_client=hyper_params_clients)
 # train = train_paramters["train"][0]
 # test = train_paramters["test"][0]
 # num_class = train_paramters["num_class"]
 
 # print(train_paramters["train"])
 
-print(len(train[0]))
-
-results_metrics = run_continual(train[0], test[0], num_class, model_name, lr, train_epochs=epoches, experiences=4)
-
+results_metrics = run_continual(train[0], test[0], num_class, model_name, lr, train_epochs=2, experiences=4)
 #for client in domain_type:
     
     #img, lb = next(iter(train))

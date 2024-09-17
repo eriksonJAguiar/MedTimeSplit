@@ -74,8 +74,8 @@ def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_a
         if is_stream:
             return train, test, num_class
             
-        train_loader = DataLoader(train, batch_size=batch_size, num_workers=4, shuffle=True)
-        test_loader = DataLoader(test, batch_size=batch_size, num_workers=4, shuffle=False)
+        train_loader = DataLoader(train, batch_size=batch_size, num_workers=95, shuffle=True)
+        test_loader = DataLoader(test, batch_size=batch_size, num_workers=95, shuffle=False)
     else:
         data = CustomDatasetFromCSV(root_path, tf_image=tf_image, csv_name=csv_path, as_rgb=as_rgb)
             
@@ -94,8 +94,8 @@ def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_a
         if is_stream:
             return train_sampler, test_sampler, num_class
             
-        train_loader = DataLoader(data, batch_size=batch_size, sampler=train_sampler, num_workers=4)
-        test_loader = DataLoader(data, batch_size=batch_size, sampler=test_sampler, num_workers=4)
+        train_loader = DataLoader(data, batch_size=batch_size, sampler=train_sampler, num_workers=95)
+        test_loader = DataLoader(data, batch_size=batch_size, sampler=test_sampler, num_workers=95)
             
         #print(Counter(train_loader.dataset))
 

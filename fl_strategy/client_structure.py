@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from fl_strategy import centralized
-#from fl_strategy.centralized_lightning import TrainModelLigthning, CustomTimeCallback
+from fl_strategy.centralized_lightning import TrainModelLigthning, CustomTimeCallback
 
 import pandas as pd
 import lightning as pl
@@ -27,9 +27,10 @@ def get_parameters(model):
 class MedicalClient(flwr.client.NumPyClient):
     """Flower client
     """
-    def __init__(self, cid, model, train_loader, test_loader, lr, epoch, num_class, metrics_file_name):
+    def __init__(self, cid, model, model_name, train_loader, test_loader, lr, epoch, num_class, metrics_file_name):
         self.cid = cid
         self.model = model
+        self.model_name = model_name
         self.train_loader = train_loader 
         self.test_loader = test_loader 
         self.lr = lr 
@@ -43,8 +44,9 @@ class MedicalClient(flwr.client.NumPyClient):
     def fit(self, parameters, config):
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
-        loss, metrics, metrics_epochs_train = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
+        loss, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
         metrics["client"] = self.cid
+        metrics["client"] = self.model_name
         metrics["round"] = config.get("round", 0)
         
         if not os.path.exists(f"train_{self.metrics_file_name}"):
@@ -57,7 +59,7 @@ class MedicalClient(flwr.client.NumPyClient):
     def evaluate(self, parameters, config):
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
-        test_loss, metrics_test,  metrics_epochs_test = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
+        test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
         metrics_test["client"] = self.cid
         metrics_test["round"] = config.get("round", 0)
         
@@ -93,6 +95,9 @@ class MedicalClientLightning(flwr.client.NumPyClient):
         print(f"[Client {self.cid}] fit, config: {config}")
         
         #logger = CSVLogger(save_dir=os.path.join(metrics_save_path,"logs", "hold-out"), name="{}-{}".format(model_name, database_name))
+        print(f"Dataset lenght {len(self.train_loader)}")
+        if len(self.train_loader) == 0:
+            raise ValueError("Dataloader is empty")
         
         trainer = pl.Trainer(
             max_epochs= self.epochs,
@@ -151,8 +156,13 @@ class MedicalClientLightning(flwr.client.NumPyClient):
             devices="auto",
             enable_progress_bar=False,
         )
+        
+        print(f"Dataset lenght {len(self.test_loader)}")
+        if len(self.test_loader) == 0:
+            raise ValueError("Dataloader is empty")
     
         results = trainer.test(self.ligh_model, self.test_loader)
+        print(results)
         metrics = results[0]
         test_loss = metrics["test_loss"]
         print(metrics)

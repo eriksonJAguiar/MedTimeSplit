@@ -100,7 +100,7 @@ def train(model, train_loader, epochs, lr, num_class):
                            "kappa": train_kappa.compute().item(),
                         }
         metrics_epochs_train.append(epochs_metrics)
-        print(epochs_metrics)
+        #print(epochs_metrics)
         
         #writer.close()
         scheduler.step(loss_val)
@@ -205,7 +205,7 @@ def test(model, test_loader, epochs, num_class):
                     }
                 
             metrics_epochs_test.append(epoch_metrics)
-            print(epoch_metrics)
+            #print(epoch_metrics)
         
         # writer.close()
     
