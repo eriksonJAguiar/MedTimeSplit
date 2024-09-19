@@ -8,20 +8,31 @@ import torch
 import os
 import cv2
 import torchvision
-from sklearn.model_selection import train_test_split
 import torchvision.models as models
+import matplotlib.pyplot as plt
+from PIL import Image
 import matplotlib.pyplot as plt
 from torch.utils.data import ConcatDataset
 from avalanche.benchmarks.utils import AvalancheDataset, concat_datasets
+from avalanche.benchmarks import nc_benchmark, ni_benchmark
 
 
 #device for GPU or CPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # define seed for reproducing experiments
-RANDOM_SEED = 43
+RANDOM_SEED = 37
 torch.manual_seed(RANDOM_SEED)
 #np.random.seed(RANDOM_SEED)
+
+def __sample_dirichlet(data, alpha, random_state=None):
+    np.random.seed(random_state)
+    proportions = np.random.dirichlet(alpha, size=1)[0]
+    sampled_data = data.sample(frac=1.0, replace=False, random_state=random_state).reset_index(drop=True)
+    split_indices = (proportions * len(data)).astype(int)
+    split_data = np.split(sampled_data, np.cumsum(split_indices)[:-1])
+    
+    return split_data
 
 def load_database_df(root_path, csv_path, batch_size, image_size=(128,128), is_agumentation=False, test_size=None, as_rgb=False, is_stream=False, tf_transformer=None):
     """load images from csv and split into train and testing resulting train and test dataloader
@@ -184,7 +195,7 @@ def load_database_hold_out(root_path, csv_path, batch_size, image_size=(128,128)
 
     return train_loader, test_loader, num_class
 
-def load_database_federated_continous(root_path, csv_path, batch_size, hyperparams_client, image_size=(128,128), test_size=None, as_rgb=False, K=5):
+def load_database_federated_continous(root_path, csv_path, hyperparams_client, image_size=(128,128), test_size=None, as_rgb=False, K=5):
     """load images from csv and partition into train and testing based on temporal strategy resulting train and test dataloader
 
     Args:
@@ -195,7 +206,7 @@ def load_database_federated_continous(root_path, csv_path, batch_size, hyperpara
         image_size (tuple, optional): _description_. Defaults to (128,128).
         test_size (float, optional): if is not None, you should set up a float number that indicates partication will be split to train. 0.1 indicates 10% of test set. Defaults to None.
         as_rgb (bool, optional): if is True is a colored image. Defaults to False.
-        K (int, optional). Defaults to 5. The number of d
+        K (int, optional): The number of clients Defaults to 5. 
     Returns:
         train_loader (torch.utils.data.Dataloader): images dataloader for training
         test_loader (torch.utils.data.Dataloader): images dataloader for testing
@@ -217,14 +228,20 @@ def load_database_federated_continous(root_path, csv_path, batch_size, hyperpara
         train_csv = csv_data[csv_data["Task"] == "Train"]
         test_csv = csv_data[csv_data["Task"] == "Test"]
     
-        train_csv = train_csv.sample(frac=1.0, replace=False, random_state=RANDOM_SEED).reset_index(drop=True)
-        test_csv = test_csv.sample(frac=1.0, replace=False, random_state=RANDOM_SEED).reset_index(drop=True)
+        #train_csv = train_csv.sample(frac=1.0, replace=False, random_state=RANDOM_SEED).reset_index(drop=True)
+        #test_csv = test_csv.sample(frac=1.0, replace=False, random_state=RANDOM_SEED).reset_index(drop=True)
         
     else:
-        shuffle_df = csv_data.sample(frac=1.0, replace=False, random_state=RANDOM_SEED).reset_index(drop=True)
+        #shuffle_df = csv_data.sample(frac=1.0, replace=False, random_state=RANDOM_SEED).reset_index(drop=True)
+        shuffle_df = csv_data
         train_size = int(len(csv_data) * (1-test_size))
         train_csv = shuffle_df[:train_size]
         test_csv = shuffle_df[train_size:]
+    
+    #using dirilechlet distribution to selecte random examples
+    alpha = [0.5] * K
+    train_split = __sample_dirichlet(train_csv, alpha, random_state=RANDOM_SEED)
+    test_split = __sample_dirichlet(test_csv, alpha, random_state=RANDOM_SEED)
     
     for cl in range(K):
             #print(f"Domain k: {cl}")
@@ -256,15 +273,12 @@ def load_database_federated_continous(root_path, csv_path, batch_size, hyperpara
                 ])
             }
             
-            #train_split = train_csv.sample(frac=1.0, replace=False).reset_index(drop=True)
-            #test_split = test_csv.sample(frac=1.0, replace=False).reset_index(drop=True)
-            
             aval_train_clients = []
             aval_test_clients = []
             
             for k, tf in domain_j.items():
-                train_cl = CustomDatasetContinous(path_root=root_path, csv_data=train_csv, tf_image=tf, as_rgb=as_rgb)
-                test_cl = CustomDatasetContinous(path_root=root_path, csv_data=test_csv, tf_image=tf, as_rgb=as_rgb)
+                train_cl = CustomDatasetContinous(path_root=root_path, csv_data=train_split[cl], tf_image=tf, as_rgb=as_rgb)
+                test_cl = CustomDatasetContinous(path_root=root_path, csv_data=test_split[cl], tf_image=tf, as_rgb=as_rgb)
                 num_class = len(train_cl.cl_name.values())
 
                 #print(f"Classes in train_cl: {set(train_cl.cl_name.values())}")
@@ -292,9 +306,7 @@ def load_database_federated_continousSplit(root_path, csv_path, image_size=(128,
         root_path (str): root path is located images
         csv_path (str): path of csv file to get images.
         batch_size (int): number of batch in training and test
-        hyperparams_client(dict): patients features related to domains
         image_size (tuple, optional): _description_. Defaults to (128,128).
-        test_size (float, optional): if is not None, you should set up a float number that indicates partication will be split to train. 0.1 indicates 10% of test set. Defaults to None.
         as_rgb (bool, optional): if is True is a colored image. Defaults to False.
         K (int, optional). Defaults to 5. The number of d
     Returns:
@@ -350,7 +362,7 @@ def load_database_federated_continousSplit(root_path, csv_path, image_size=(128,
                 ]),
                 "noise": transforms.Compose([
                         transforms.Resize(image_size),
-                        CustomTransformSaltPepperNoise(salt_prob=salt_prob, pepper_prob=pepper_prob),
+                        CustomTransformSaltPepperNoise(salt_prob=salt_prob[cl], pepper_prob=pepper_prob[cl]),
                         transforms.ToTensor(),
                         #transforms.v2.GaussianNoise(mean=hyperparams_client[str(cl)]["mean"], sigma=hyperparams_client[str(cl)]["sigma"]),
                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -364,30 +376,46 @@ def load_database_federated_continousSplit(root_path, csv_path, image_size=(128,
                 "rotation": transforms.Compose([
                         transforms.Resize(image_size),
                         #CustomTransformOcclusion(occlusion_size=hyperparams_client[str(cl)]["occlusion_size"]),
-                        transforms.Compose([transforms.ToTensor(), transforms.RandomRotation(rotation_direction[cl])]),
+                        transforms.RandomRotation(rotation_direction[cl]),
                         transforms.ToTensor(),
                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                 ])
             }
             
+            # domain_j =  transforms.Compose([
+            #             transforms.Resize(image_size),
+            #             #CustomTransformOcclusion(occlusion_size=hyperparams_client[str(cl)]["occlusion_size"]),
+            #             CustomTransformSaltPepperNoise(salt_prob=salt_prob, pepper_prob=pepper_prob), #"noise"
+            #             transforms.ColorJitter(contrast=contrast[cl]), #"constrast
+            #             transforms.RandomRotation(rotation_direction[cl]), #"rotation"
+            #             transforms.ToTensor(),
+            #             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            # ])
+            
             #train_split = train_csv.sample(frac=1.0, replace=False).reset_index(drop=True)
             #test_split = test_csv.sample(frac=1.0, replace=False).reset_index(drop=True)
+        
+            #print(f"Classes in train_cl: {set(train_cl.cl_name.values())}")
+            
+            num_domains = len(domain_j.keys())
             
             aval_train_clients = []
             aval_test_clients = []
             
-            for k, tf in domain_j.items():
-                train_cl = CustomDatasetContinous(path_root=root_path, csv_data=train_split[cl], tf_image=tf, as_rgb=as_rgb)
-                test_cl = CustomDatasetContinous(path_root=root_path, csv_data=test_split[cl], tf_image=tf, as_rgb=as_rgb)
+            train_split_domain = np.array_split(train_split[cl], num_domains)
+            test_split_domain = np.array_split(test_split[cl], num_domains)
+            
+            for i, (k, tf) in enumerate(domain_j.items()):
+                train_cl = CustomDatasetContinous(path_root=root_path, csv_data=train_split_domain[i], tf_image=tf, as_rgb=as_rgb)
+                test_cl = CustomDatasetContinous(path_root=root_path, csv_data=test_split_domain[i], tf_image=tf, as_rgb=as_rgb)
                 num_class = len(train_cl.cl_name.values())
-
-                #print(f"Classes in train_cl: {set(train_cl.cl_name.values())}")
                 
                 aval_train_clients.append(train_cl)
                 aval_test_clients.append(test_cl)
-            
+
             avl_ds_train = ConcatDataset(aval_train_clients)
             avl_ds_test = ConcatDataset(aval_test_clients)
+            
             train_clients.append(avl_ds_train)
             test_clients.append(avl_ds_test)
             
@@ -426,8 +454,9 @@ def load_database_federated_continousPermuted(root_path, csv_path, image_size=(1
     
     #2nd read csv file with values 
     csv_data = pd.read_csv(csv_path)
+    seeds = np.random.randint(40, 123, K)
     
-    np.random.seed(RANDOM_SEED)
+    #np.random.seed(RANDOM_SEED)
 
     if test_size is None:
         train_csv = csv_data[csv_data["Task"] == "Train"]
@@ -452,8 +481,8 @@ def load_database_federated_continousPermuted(root_path, csv_path, image_size=(1
             #print(f"Domain k: {cl}")
         domain_j = transforms.Compose([
             transforms.Resize(image_size),
+            CustomTransformPermuted(image_size=image_size, seed=seeds[cl]),   
             transforms.ToTensor(),
-            CustomTransformPermuted(image_size=image_size),   
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
             
@@ -911,29 +940,44 @@ class CustomTransformSaltPepperNoise():
 
     def __call__(self, img):
         img_np = np.array(img)
+        h,w = img_np.shape[0], img_np.shape[1]
 
-        salt_mask = np.random.rand(*img_np.shape[:2]) < self.salt_prob
+        salt_mask = np.random.rand(h,w) < self.salt_prob
         img_np[salt_mask] = 255
 
-        pepper_mask = np.random.rand(*img_np.shape[:2]) < self.pepper_prob
+        pepper_mask = np.random.rand(h,w) < self.pepper_prob
         img_np[pepper_mask] = 0
 
         return Image.fromarray(img_np.astype(np.uint8))
 
 class CustomTransformPermuted:
-    def __init__(self, image_size):
+    def __init__(self, image_size, seed=None):
         # Generate a random permutation for shuffling
+        np.random.seed(seed)
         self.image_size = image_size
         self.permutation = np.random.permutation(image_size[0]*image_size[1])
 
     def __call__(self, image):
-        # Flatten the image to a 1D array
-        img_flat = np.array(image).flatten()
+        np_image = np.array(image)
+        if len(np_image.shape) == 3 and np_image.shape[2] == 3:
+            img_permuted = np.zeros_like(np_image)
+            for c in range(3):
+                # Flatten the image to a 1D array
+                img_flat = np_image[:, :, c].flatten()
+                
+                # Apply the permutation
+                img_permuted_flat = img_flat[self.permutation]
+                
+                # Reshape back to the original shape
+                img_permuted[:, :, c] = img_permuted_flat.reshape(self.image_size)
+        else:
+            # Flatten the image to a 1D array
+            img_flat = np_image.flatten()
+            
+            # Apply the permutation
+            img_permuted_flat = img_flat[self.permutation]
+            
+            # Reshape back to the original shape
+            img_permuted = img_permuted_flat.reshape(self.image_size)
         
-        # Apply the permutation
-        img_permuted = img_flat[self.permutation]
-        
-        # Reshape back to the original shape
-        img_permuted = img_permuted.reshape(self.image_size)
-        
-        return img_permuted
+        return Image.fromarray(img_permuted)

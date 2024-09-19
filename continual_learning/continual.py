@@ -7,14 +7,10 @@ from avalanche.benchmarks import nc_benchmark, ni_benchmark
 from avalanche.benchmarks.utils import AvalancheDataset
 from avalanche.logging import TextLogger
 import torch
-import torchvision
-import os
 from utils import utils
-from utils.metrics import OCMMetric, AverageBadDecisionMetric
+from utils.metrics import OCM, AverageBadDecision
 
-from torch.optim import Adam
-from torch.nn import CrossEntropyLoss
-from avalanche.models import SimpleMLP
+
 from avalanche.training.supervised import Naive
 from avalanche.training.supervised.strategy_wrappers_online import OnlineNaive
 from avalanche.training.plugins import EarlyStoppingPlugin
@@ -31,6 +27,16 @@ from avalanche.logging import InteractiveLogger
 from avalanche.training.plugins import EvaluationPlugin
 from avalanche.benchmarks.utils import concat_datasets
 from avalanche.training.templates import SupervisedTemplate
+from avalanche.benchmarks import SplitImageNet
+
+from utils.partitioning import load_database_federated_continous, load_database_federated_continousSplit, load_database_federated_continousPermuted
+from utils import utils
+import pandas as pd
+import numpy as np
+import os
+import json
+from torch.optim import Adam
+from torch.nn import CrossEntropyLoss
 
 
 device = torch.device(
@@ -55,7 +61,9 @@ class Cumulative(SupervisedTemplate):
         self.adapted_dataset = self.dataset.train()
 
 
-def run_continual(train, test, num_class, model_name, lr=0.001, train_epochs=10, experiences=4):
+# def __train_continous(train, num_class, lr, train_epochs, experience_size):
+
+def run_continual(train, test, model, optimizer, criterion, train_epochs=10, train_mb_size=16, experiences=4):
     """running continual learning
 
     Args:
@@ -79,33 +87,34 @@ def run_continual(train, test, num_class, model_name, lr=0.001, train_epochs=10,
         balance_experiences=True
     )
     
-    # train_stream_online = split_online_stream(
-    #     original_stream=benchmark.train_stream,
-    #     experience_size=len(train)//16,
-    #     drop_last=True
-    # )
+    train_stream_online = split_online_stream(
+        original_stream=benchmark.train_stream,
+        experience_size=len(train)//16,
+        drop_last=True
+    )
     
-    # test_stream_online = split_online_stream(
-    #     original_stream=benchmark.test_stream,
-    #     experience_size=len(train)//80,
-    #     drop_last=True
-    # )
+    test_stream_online = split_online_stream(
+        original_stream=benchmark.test_stream,
+        experience_size=len(test)//16,
+        drop_last=True
+    )
 
     eval_plugin = EvaluationPlugin(
-        #accuracy_metrics(minibatch=True, epoch=True, experience=True, stream=True),
+        accuracy_metrics(minibatch=True, epoch=True, experience=True, stream=True),
         #class_accuracy_metrics(minibatch=True, epoch=True, experience=True, stream=True),
-        #loss_metrics(minibatch=True, epoch=True, experience=True, stream=True),
-        #timing_metrics(epoch=True),
-        #forgetting_metrics(experience=True, stream=True),
-        #bwt_metrics(experience=True, stream=True),
+        loss_metrics(minibatch=True, epoch=True, experience=True, stream=True),
+        timing_metrics(epoch=True),
+        forgetting_metrics(experience=True, stream=True),
+        bwt_metrics(experience=True, stream=True),
+        #AverageForgetting(),
         #forward_transfer_metrics(experience=True, stream=True),
         #cpu_usage_metrics(experience=True),
-        AverageBadDecisionMetric(),
-        OCMMetric(),
+        AverageBadDecision(),
+        OCM(),
         #confusion_matrix_metrics(num_classes=num_class, save_image=False, stream=True),
         #disk_usage_metrics(minibatch=True, epoch=True, experience=True, stream=True),
         #StreamClassAccuracy(classes=list(range(0,num_class))),
-        # StreamAccuracy(),
+        #StreamAccuracy(),
         # StreamBWT(),
         # StreamForwardTransfer(),
         # ExperienceForwardTransfer(),
@@ -116,51 +125,26 @@ def run_continual(train, test, num_class, model_name, lr=0.001, train_epochs=10,
         strict_checks=False
     )
     
-    model = utils.make_model_pretrained(model_name=model_name, num_class=num_class)
-    optimizer = Adam(model.parameters(), lr=lr, weight_decay=0.001)
-    criterion = CrossEntropyLoss()
-    cl_strategy = Naive(
+    cl_strategy = OnlineNaive(
         model, optimizer, criterion,
-        train_mb_size=train_epochs, train_epochs=train_epochs,
+        train_mb_size=train_mb_size, eval_mb_size=train_mb_size,
+        train_passes=train_epochs,
+        eval_every=1,
         evaluator=eval_plugin,
         device=device
     )
-    # cl_strategy = OnlineNaive(
-    #     model, optimizer, criterion,
-    #     train_mb_size=16, eval_mb_size=16,
-    #     train_passes=train_epochs,
-    #     eval_every=train_epochs,
-    #     evaluator=eval_plugin,
-    #     #plugins=[eval_plugin],
-    #     device=device
-    # )
-    # cl_strategy = Cumulative(
-    #     model, optimizer, criterion,
-    #     train_mb_size=128, train_epochs=train_epochs, eval_mb_size=128,
-    #     plugins=[EarlyStoppingPlugin(patience=5, val_stream_name='train')],
-    #     evaluator=eval_plugin,
-    #     device=device
-    # )
         
     results = []
     print('Starting experiment...')
     print("Training...")
-    #for experience, exp_test in zip(train_stream_online, test_stream_online):
-    for experience in benchmark.train_stream:
+    for experience, exp_test in zip(train_stream_online, test_stream_online):
+    #for experience in benchmark.train_stream:
         print("Start of experience ", experience.current_experience)
+        print(f"Experience {experience.current_experience} - Number of samples: {len(experience.dataset)}")
         # experiences have an ID that denotes its position in the stream
-        # this is used only for logging (don't rely on it for training!)
         eid = experience.current_experience
-        # for classification benchmarks, experiences have a list of classes in this experience
-        clss = experience.classes_in_this_experience
-        print(experience.dataset)
-        #clss = [target for _, target in experience.dataset]
-        #task = experience.task_label
-        #print(f"EID={eid} classes={len(clss)} task={task}")
         print(f"EID={eid}")
         # the experience provides a dataset
-        print(f"data: {len(experience.dataset)} samples")
-        
         try:
             cl_strategy.train(experience)
         except KeyError as e:
@@ -171,10 +155,7 @@ def run_continual(train, test, num_class, model_name, lr=0.001, train_epochs=10,
         print('Training completed')
         
         print('Computing accuracy on the whole test set')
-        metrics_performance = cl_strategy.eval(benchmark.test_stream)
-        
-        forward_transfer_score = metrics_performance.get('ForwardTransfer/Stream', 0)
-        print(f"Forward Transfer Score: {forward_transfer_score}")
+        metrics_performance = cl_strategy.eval(exp_test)
         
         keys = list(metrics_performance.keys())
         line = {}
@@ -189,16 +170,48 @@ def run_continual(train, test, num_class, model_name, lr=0.001, train_epochs=10,
             line["Experiment"] = str(eid)
             line[metric] = metrics_performance[keys[i]]
             
-        
         results.append(line)
         #results.append(metrics_performance)
-    
-#     forgetting_scores = [result['StreamForgetting_Stream'] for result in results if 'StreamForgetting_Stream' in result]
-
-#     # Calculate the average forgetting score across all experiences
-#   average_forgetting = sum(forgetting_scores) / len(forgetting_scores)
   
-    print(results)
-    #for res in enumerate(results)
+    print(results_dict)
     
     return results
+
+
+def continual_train(train, test, cli, model, split_method, round, experiences = 4, epoches = 10, batch_size = 32, 
+                    train_epochs = 10, num_domains = 4, num_clients = 5, lr = 0.0001):
+        
+        optimizer = Adam(model.parameters(), lr=lr, weight_decay=0.001)
+        criterion = CrossEntropyLoss()
+            
+        results_metrics = run_continual(train, 
+                                        test, 
+                                        model=model,
+                                        optimizer=optimizer, 
+                                        criterion=criterion, 
+                                        train_epochs=train_epochs, 
+                                        experiences=num_domains)
+
+            # loader = DataLoader(test[cli], batch_size=16, shuffle=False)
+            # for b in range(len(test[cli])//16):
+            #     utils.show_images(loader, f"lesion_img_{key}_{cli}", ".", batch_index=b)
+        
+        print("Final Results:")
+        print("Dataframe:")
+        domain_data = pd.DataFrame(results_metrics)
+        domain_data.insert(1, "SplitMethod", split_method)
+        domain_data.insert(2, "Client", cli)
+        domain_data.insert(3, "Client", round)
+        print(domain_data)
+        
+        if os.path.exists("cl_fl_metrics.csv"):
+            domain_data.to_csv("cl_fl_metrics.csv", mode="a", header=False, index=False)
+        else:
+            domain_data.to_csv("cl_fl_metrics.csv", mode="a", header=True, index=False)
+            
+        domain_data_values = domain_data.iloc[:,4:]
+        results_dict = {key: domain_data_values[key].mean() for key in domain_data_values.columns.tolist()}
+        
+        return results_dict
+           
+    

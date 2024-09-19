@@ -581,7 +581,7 @@ def make_model_pretrained(model_name, num_class):
 
         return model
 
-def show_images(dataset_loader, db_name, path_to_save):
+def show_images(dataset_loader, db_name, path_to_save, batch_index=0):
     """function that show images from dataloader
 
     Args:
@@ -591,15 +591,20 @@ def show_images(dataset_loader, db_name, path_to_save):
 
     """
     os.makedirs(path_to_save, exist_ok=True)
-    batch = next(iter(dataset_loader))
-    images, labels = batch
+    
+    for i, batch in enumerate(dataset_loader):
+        if i == batch_index:
+            images, labels = batch
+            break
+    else:
+        raise IndexError(f"Batch index {batch_index} out of range.")
         
     plt.figure(figsize=(11, 11))
     plt.axis("off")
     plt.title("Training Images")
     plt.imshow(np.transpose(make_grid(images[:32], padding=2, normalize=True), (1, 2, 0)))
     #plt.savefig("./attack-images/preview_train_{}.png".format(db_name), bbox_inches='tight', pad_inches=0)
-    plt.savefig(os.path.join(path_to_save, "preview_train_{}.png".format(db_name)))
+    plt.savefig(os.path.join(path_to_save, f"preview_train_{db_name}_batch_{batch_index}.png"))
 
 def show_all_images(dataset_loader, db_name, path_to_save):
     """function that show images from dataloader

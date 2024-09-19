@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from fl_strategy import centralized
 from fl_strategy.centralized_lightning import TrainModelLigthning, CustomTimeCallback
+from continual_learning import continual
 
 import pandas as pd
 import lightning as pl
@@ -189,3 +190,50 @@ class MedicalClientLightning(flwr.client.NumPyClient):
             pd.DataFrame([results]).to_csv(f"test_{self.metrics_file_name}", header=False, index=False, mode="a")
         
         return float(test_loss), len(self.test_loader), results
+    
+class MedicalClientContinous(flwr.client.NumPyClient):
+    """Flower client
+    """
+    def __init__(self, cid, model, model_name, train_loader, test_loader, lr, epoch, num_class, metrics_file_name):
+        self.cid = cid
+        self.model = model
+        self.model_name = model_name
+        self.train_loader = train_loader 
+        self.test_loader = test_loader 
+        self.lr = lr 
+        self.epochs = epoch
+        self.num_class = num_class
+        self.metrics_file_name = metrics_file_name
+        
+    def get_parameters(self, config):
+        return get_parameters(self.model)
+        
+    def fit(self, parameters, config):
+        set_parameters(self.model, parameters)
+        print(f"[Client {self.cid}] fit, config: {config}")
+        #loss, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
+        
+        metrics["client"] = self.cid
+        metrics["client"] = self.model_name
+        metrics["round"] = config.get("round", 0)
+        
+        if not os.path.exists(f"train_{self.metrics_file_name}"):
+            pd.DataFrame([metrics]).to_csv(f"train_{self.metrics_file_name}", header=True, index=False, mode="a")
+        else:
+            pd.DataFrame([metrics]).to_csv(f"train_{self.metrics_file_name}", header=False, index=False, mode="a")
+        
+        return self.get_parameters(self.model), len(self.train_loader), metrics
+
+    def evaluate(self, parameters, config):
+        set_parameters(self.model, parameters)
+        print(f"[Client {self.cid}] fit, config: {config}")
+        test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
+        metrics_test["client"] = self.cid
+        metrics_test["round"] = config.get("round", 0)
+        
+        if not os.path.exists(f"test_{self.metrics_file_name}"):
+            pd.DataFrame([metrics_test]).to_csv(f"test_{self.metrics_file_name}", header=True, index=False, mode="a")
+        else:
+            pd.DataFrame([metrics_test]).to_csv(f"test_{self.metrics_file_name}", header=False, index=False, mode="a")
+        
+        return float(test_loss), len(self.test_loader), metrics_test
