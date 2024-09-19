@@ -1,4 +1,4 @@
-from fl_strategy.client_structure import MedicalClientLightning, MedicalClient
+from fl_strategy.client_structure import MedicalClientLightning, MedicalClient, MedicalClientContinous
 from fl_strategy.server_structure import CustomFedAvg, CustomFedNova, CustomFedProx, CustomScaffold
 from utils import utils, partitioning
 import pandas as pd
@@ -107,15 +107,17 @@ def client_fn(cid):
     """
     model = utils.make_model_pretrained(model_name=model_name, num_class=num_class)
     
-    client_features = MedicalClient(cid=cid,
-                                    model=model,
-                                    model_name=model_name, 
-                                    train_loader=train[int(cid)],
-                                    test_loader=test[int(cid)], 
-                                    lr=lr, 
-                                    epoch=epochs,
-                                    num_class=num_class,
-                                    metrics_file_name="clients_federated_cl.csv"
+    client_features = MedicalClientContinous(cid=cid,
+                                            model=model,
+                                            model_name=model_name, 
+                                            train_loader=train[int(cid)],
+                                            test_loader=test[int(cid)],
+                                            split_method=split_key,
+                                            num_domain=4, 
+                                            lr=lr, 
+                                            epoch=epochs,
+                                            num_class=num_class,
+                                            metrics_file_name="clients_federated_cl.csv"
                                 )
     
     return client_features.to_client()

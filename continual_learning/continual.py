@@ -173,13 +173,12 @@ def run_continual(train, test, model, optimizer, criterion, train_epochs=10, tra
         results.append(line)
         #results.append(metrics_performance)
   
-    print(results_dict)
+    #print(results)
     
     return results
 
 
-def continual_train(train, test, cli, model, split_method, round, experiences = 4, epoches = 10, batch_size = 32, 
-                    train_epochs = 10, num_domains = 4, num_clients = 5, lr = 0.0001):
+def continual_train(train, test, cli, model, split_method, round, train_epochs = 10, num_domains = 4, lr = 0.0001):
         
         optimizer = Adam(model.parameters(), lr=lr, weight_decay=0.001)
         criterion = CrossEntropyLoss()

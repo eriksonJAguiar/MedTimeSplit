@@ -194,12 +194,14 @@ class MedicalClientLightning(flwr.client.NumPyClient):
 class MedicalClientContinous(flwr.client.NumPyClient):
     """Flower client
     """
-    def __init__(self, cid, model, model_name, train_loader, test_loader, lr, epoch, num_class, metrics_file_name):
+    def __init__(self, cid, model, model_name, train_loader, test_loader, split_method, num_domain, lr, epoch, num_class, metrics_file_name):
         self.cid = cid
         self.model = model
         self.model_name = model_name
         self.train_loader = train_loader 
         self.test_loader = test_loader 
+        self.split_method = split_method
+        self.num_domain = num_domain
         self.lr = lr 
         self.epochs = epoch
         self.num_class = num_class
@@ -212,13 +214,22 @@ class MedicalClientContinous(flwr.client.NumPyClient):
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
         #loss, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
-        
+        metrics = continual.continual_train(
+            train=self.train_loader,
+            test=self.test_loader,
+            model=self.model,
+            split_method=self.split_method,
+            round=config.get("round", 0),
+            lr=self.lr,
+            cli=self.cid,
+            num_domains=self.num_domain
+        )
         metrics["client"] = self.cid
-        metrics["client"] = self.model_name
+        metrics["model"] = self.model_name
         metrics["round"] = config.get("round", 0)
         
-        if not os.path.exists(f"train_{self.metrics_file_name}"):
-            pd.DataFrame([metrics]).to_csv(f"train_{self.metrics_file_name}", header=True, index=False, mode="a")
+        if not os.path.exists(f"train_cl_{self.metrics_file_name}"):
+            pd.DataFrame([metrics]).to_csv(f"train_cl_{self.metrics_file_name}", header=True, index=False, mode="a")
         else:
             pd.DataFrame([metrics]).to_csv(f"train_{self.metrics_file_name}", header=False, index=False, mode="a")
         
