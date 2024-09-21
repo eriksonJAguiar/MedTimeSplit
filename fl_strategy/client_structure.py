@@ -2,6 +2,9 @@ from collections import OrderedDict
 from fl_strategy import centralized
 from fl_strategy.centralized_lightning import TrainModelLigthning, CustomTimeCallback
 from continual_learning import continual
+from avalanche.training.supervised.strategy_wrappers_online import OnlineNaive
+from avalanche.benchmarks.scenarios.online import split_online_stream
+from avalanche.benchmarks import nc_benchmark, ni_benchmark
 
 import pandas as pd
 import lightning as pl
@@ -207,6 +210,15 @@ class MedicalClientContinous(flwr.client.NumPyClient):
         self.num_class = num_class
         self.metrics_file_name = metrics_file_name
         
+        self.benchmark = ni_benchmark(
+            train_dataset=train_loader, 
+            test_dataset=self.test_loader,
+            n_experiences=4, 
+            task_labels=False,
+            shuffle=True, 
+            balance_experiences=True
+        )
+        
     def get_parameters(self, config):
         return get_parameters(self.model)
         
@@ -214,9 +226,45 @@ class MedicalClientContinous(flwr.client.NumPyClient):
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
         #loss, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
-        metrics = continual.continual_train(
-            train=self.train_loader,
-            test=self.test_loader,
+        
+        # benchmark = ni_benchmark(
+        #     train_dataset=self.train, 
+        #     test_dataset=self.test,
+        #     n_experiences=4, 
+        #     task_labels=False,
+        #     shuffle=True, 
+        #     balance_experiences=True
+        # )
+    
+        train_stream_online = split_online_stream(
+            original_stream=self.benchmark.train_stream,
+            experience_size=len(self.train_loader)//16,
+            drop_last=True
+        )
+        
+        continual.continual_train(
+            train_stream_online=train_stream_online,
+            model=self.model,
+            lr=self.lr,
+            num_domains=self.num_domain
+        )
+        
+        
+        return self.get_parameters(self.model), len(self.train_loader), {}
+
+    def evaluate(self, parameters, config):
+        set_parameters(self.model, parameters)
+        print(f"[Client {self.cid}] fit, config: {config}")
+        #test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
+    
+        test_stream_online = split_online_stream(
+            original_stream=self.benchmark.test_stream,
+            experience_size=len(self.test_loader)//16,
+            drop_last=True
+        )
+    
+        metrics_test = continual.continual_test(
+            test_stram_online=test_stream_online,
             model=self.model,
             split_method=self.split_method,
             round=config.get("round", 0),
@@ -224,27 +272,14 @@ class MedicalClientContinous(flwr.client.NumPyClient):
             cli=self.cid,
             num_domains=self.num_domain
         )
-        metrics["client"] = self.cid
-        metrics["model"] = self.model_name
-        metrics["round"] = config.get("round", 0)
         
-        if not os.path.exists(f"train_cl_{self.metrics_file_name}"):
-            pd.DataFrame([metrics]).to_csv(f"train_cl_{self.metrics_file_name}", header=True, index=False, mode="a")
-        else:
-            pd.DataFrame([metrics]).to_csv(f"train_{self.metrics_file_name}", header=False, index=False, mode="a")
+        # metrics_test["client"] = self.cid
+        # metrics_test["round"] = config.get("round", 0)
+        print(metrics_test)
         
-        return self.get_parameters(self.model), len(self.train_loader), metrics
-
-    def evaluate(self, parameters, config):
-        set_parameters(self.model, parameters)
-        print(f"[Client {self.cid}] fit, config: {config}")
-        test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
-        metrics_test["client"] = self.cid
-        metrics_test["round"] = config.get("round", 0)
+        # if not os.path.exists(f"test_{self.metrics_file_name}"):
+        #     pd.DataFrame([metrics_test]).to_csv(f"test_{self.metrics_file_name}", header=True, index=False, mode="a")
+        # else:
+        #     pd.DataFrame([metrics_test]).to_csv(f"test_{self.metrics_file_name}", header=False, index=False, mode="a")
         
-        if not os.path.exists(f"test_{self.metrics_file_name}"):
-            pd.DataFrame([metrics_test]).to_csv(f"test_{self.metrics_file_name}", header=True, index=False, mode="a")
-        else:
-            pd.DataFrame([metrics_test]).to_csv(f"test_{self.metrics_file_name}", header=False, index=False, mode="a")
-        
-        return float(test_loss), len(self.test_loader), metrics_test
+        return float(0.0), len(self.test_loader), metrics_test

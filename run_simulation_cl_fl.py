@@ -27,17 +27,18 @@ if device.type == "cuda":
 root_path = os.path.join("dataset", "MelanomaDB")
 csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
 
-
-image_size = (224,224)
 experiences = 4
-num_clients = 5
-batch_size = 32
+#num_clients = 5
+num_clients = 2
+batch_size = 16
 image_size = (224, 224)
 model_name = args["model_name"]
 split_key = args["split"]
 lr = 0.0001
-epochs = 10
-num_rounds = 50
+epochs = 2
+#epochs = 10
+#num_rounds = 50
+num_rounds = 1
 
 with open("clients_config/clients_params.json", 'r') as f:
     hyper_params_clients = json.load(f)
