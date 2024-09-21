@@ -10,3 +10,5 @@ scikit-learn
 timm
 flwr[simulation]
 avalanche-lib
+pytorchcv==0.0.67
+lightning

@@ -1,10 +1,9 @@
 from fl_strategy import centralized
-from utils import utils, partitioning, non_iid_test
+from utils import utils
 from fl_strategy.centralized_lightning import PytorchTrainingAndTest
 import torch
 import os
 import time
-import json
 import pandas as pd
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

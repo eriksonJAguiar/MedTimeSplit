@@ -273,13 +273,14 @@ class MedicalClientContinous(flwr.client.NumPyClient):
             num_domains=self.num_domain
         )
         
-        # metrics_test["client"] = self.cid
-        # metrics_test["round"] = config.get("round", 0)
+        metrics_test["client"] = self.cid
+        metrics_test["round"] = config.get("round", 0)
+        loss = metrics_test["Loss_Exp_eval"]
         print(metrics_test)
         
-        # if not os.path.exists(f"test_{self.metrics_file_name}"):
-        #     pd.DataFrame([metrics_test]).to_csv(f"test_{self.metrics_file_name}", header=True, index=False, mode="a")
-        # else:
-        #     pd.DataFrame([metrics_test]).to_csv(f"test_{self.metrics_file_name}", header=False, index=False, mode="a")
+        if not os.path.exists(f"test_{self.metrics_file_name}"):
+            pd.DataFrame([metrics_test]).to_csv(f"test_{self.metrics_file_name}", header=True, index=False, mode="a")
+        else:
+            pd.DataFrame([metrics_test]).to_csv(f"test_{self.metrics_file_name}", header=False, index=False, mode="a")
         
-        return float(0.0), len(self.test_loader), metrics_test
+        return float(loss), len(self.test_loader), metrics_test

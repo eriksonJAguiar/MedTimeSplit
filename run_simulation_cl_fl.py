@@ -28,17 +28,14 @@ root_path = os.path.join("dataset", "MelanomaDB")
 csv_path = os.path.join(root_path, "ISIC_2018_dataset.csv")
 
 experiences = 4
-#num_clients = 5
-num_clients = 2
+num_clients = 5
 batch_size = 16
 image_size = (224, 224)
 model_name = args["model_name"]
 split_key = args["split"]
 lr = 0.0001
-epochs = 2
-#epochs = 10
-#num_rounds = 50
-num_rounds = 1
+epochs = 10
+num_rounds = 50
 
 with open("clients_config/clients_params.json", 'r') as f:
     hyper_params_clients = json.load(f)
@@ -74,26 +71,22 @@ results_fl = []
 
 def weighted_average(metrics):
     # Multiply accuracy of each client by number of examples used
-    acc = [num_examples * m["val_accuracy"] for num_examples, m in metrics]
-    pr = [num_examples * m["val_precision"] for num_examples, m in metrics]
-    re = [num_examples * m["val_recall"] for num_examples, m in metrics]
-    spc = [num_examples * m["val_specificity"] for num_examples, m in metrics]
-    f1 = [num_examples * m["val_f1_score"] for num_examples, m in metrics]
-    auc = [num_examples * m["val_auc"] for num_examples, m in metrics]
-    mcc = [num_examples * m["val_mcc"] for num_examples, m in metrics]
-    bal_acc = [num_examples * m["val_balanced_acc"] for num_examples, m in metrics]
+    acc_exp = [num_examples * m["Top1_Acc_Exp_eval"] for num_examples, m in metrics]
+    acc_stream = [num_examples * m["Top1_Acc_Stream_eval"] for num_examples, m in metrics]
+    forgetting = [num_examples * m["StreamForgetting_eval"] for num_examples, m in metrics]
+    btw = [num_examples * m["StreamBWT_eval"] for num_examples, m in metrics]
+    abd = [num_examples * m["AverageBadDecision_eval"] for num_examples, m in metrics]
+    ocm = [num_examples * m["OCM_eval"] for num_examples, m in metrics]
     
     examples = [num_examples for num_examples, _ in metrics]
     
     results = {
-            "val_accuracy": sum(acc)/ sum(examples),
-            "val_balanced_accuracy": sum(bal_acc)/ sum(examples),
-            "val_precision": sum(pr)/sum(examples),
-            "val_recall": sum(re)/sum(examples),
-            "val_specificity": sum(spc)/sum(examples),
-            "val_f1_score": sum(f1)/sum(examples),
-            "val_auc": sum(auc)/sum(examples),
-            "val_mcc": sum(mcc)/sum(examples),
+            "val_accuracy_exp": sum(acc_exp)/ sum(examples),
+            "val_accuracy_stream": sum(acc_stream)/ sum(examples),
+            "val_forgetting": sum(forgetting)/sum(examples),
+            "val_btw": sum(btw)/sum(examples),
+            "val_adb": sum(abd)/sum(examples),
+            "val_ocm": sum(ocm)/sum(examples),
         }
 
     results_fl.append(results)
@@ -123,7 +116,7 @@ def client_fn(cid):
     
     return client_features.to_client()
 
-strategy_name = args["strategy"]
+strategy_name = str(args["strategy"])
 strategy = None 
 
 if strategy_name == "FedAvg":
