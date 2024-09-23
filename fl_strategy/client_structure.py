@@ -4,7 +4,8 @@ from fl_strategy.centralized_lightning import TrainModelLigthning, CustomTimeCal
 from continual_learning import continual
 from avalanche.training.supervised.strategy_wrappers_online import OnlineNaive
 from avalanche.benchmarks.scenarios.online import split_online_stream
-from avalanche.benchmarks import nc_benchmark, ni_benchmark
+from avalanche.benchmarks import ni_benchmark
+from backdoors.generate_attacks import PoisonWithBadNets
 
 import pandas as pd
 import lightning as pl
@@ -12,6 +13,8 @@ import lightning as pl
 import torch
 import flwr
 import os
+
+TARGET_PATH = ["/home/eriksonaguiar/codes/fl_medical/backdoors/target/alert.png"]
 
 def set_parameters(model, parameters):
     params_dict = zip(model.state_dict().keys(), parameters)
@@ -31,7 +34,7 @@ def get_parameters(model):
 class MedicalClient(flwr.client.NumPyClient):
     """Flower client
     """
-    def __init__(self, cid, model, model_name, train_loader, test_loader, lr, epoch, num_class, metrics_file_name):
+    def __init__(self, cid, model, model_name, train_loader, test_loader, lr, epoch, num_class, metrics_file_name, is_attack=None, num_posoning=None, poisoning_percent=None):
         self.cid = cid
         self.model = model
         self.model_name = model_name
@@ -41,6 +44,9 @@ class MedicalClient(flwr.client.NumPyClient):
         self.epochs = epoch
         self.num_class = num_class
         self.metrics_file_name = metrics_file_name
+        self.is_attack = None
+        self.num_poisoning = num_posoning
+        self.poisoning_percent = poisoning_percent
         
     def get_parameters(self, config):
         return get_parameters(self.model)
@@ -48,10 +54,17 @@ class MedicalClient(flwr.client.NumPyClient):
     def fit(self, parameters, config):
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
-        loss, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
+        if self.is_attack is None:
+            loss, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
+        else:
+            attack = PoisonWithBadNets(target_size=(10, 10), target_path=TARGET_PATH, poison_percent=poison_percent)
+            self.train_loader = attack.run_badNets(self.train_loader, "target")
+            loss, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
+            
         metrics["client"] = self.cid
         metrics["client"] = self.model_name
         metrics["round"] = config.get("round", 0)
+        metrics["poisoning"] = self.poisoning_percent 
         
         if not os.path.exists(f"train_{self.metrics_file_name}"):
             pd.DataFrame([metrics]).to_csv(f"train_{self.metrics_file_name}", header=True, index=False, mode="a")
@@ -64,8 +77,16 @@ class MedicalClient(flwr.client.NumPyClient):
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
         test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
+        # if not self.is_attack is None:
+        #     test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
+        # else:
+        #     attack = PoisonWithBadNets(target_size=(10, 10), target_path=TARGET_PATH, poison_percent=self.num_poisoning)
+        #     self.test_loader = attack.run_badNets(self.test_loader, "target")
+        #     test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
+        
         metrics_test["client"] = self.cid
         metrics_test["round"] = config.get("round", 0)
+        metrics_test["poisoning"] = self.poisoning_percent 
         
         if not os.path.exists(f"test_{self.metrics_file_name}"):
             pd.DataFrame([metrics_test]).to_csv(f"test_{self.metrics_file_name}", header=True, index=False, mode="a")
