@@ -14,14 +14,14 @@ import torch
 import flwr
 import os
 
-TARGET_PATH = ["/home/eriksonaguiar/codes/fl_medical/backdoors/target/alert.png"]
+TARGET_PATH = "/home/eriksonaguiar/codes/fl_medical/backdoors/target/alert.png"
 
 def set_parameters(model, parameters):
     params_dict = zip(model.state_dict().keys(), parameters)
     #state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
     state_dict = OrderedDict(
         {
-            k: torch.Tensor(v) if v.shape != torch.Size([]) else torch.Tensor([0])
+            k: torch.tensor(v, dtype=torch.float32) if v.shape != torch.Size([]) else torch.tensor([0], dtype=torch.float32)
             for k, v in params_dict
         }
     )
@@ -34,7 +34,7 @@ def get_parameters(model):
 class MedicalClient(flwr.client.NumPyClient):
     """Flower client
     """
-    def __init__(self, cid, model, model_name, train_loader, test_loader, lr, epoch, num_class, metrics_file_name, is_attack=None, num_posoning=None, poisoning_percent=None):
+    def __init__(self, cid, model, model_name, train_loader, test_loader, lr, epoch, num_class, metrics_file_name, is_attack=False, poisoning_percent=0.0):
         self.cid = cid
         self.model = model
         self.model_name = model_name
@@ -44,8 +44,7 @@ class MedicalClient(flwr.client.NumPyClient):
         self.epochs = epoch
         self.num_class = num_class
         self.metrics_file_name = metrics_file_name
-        self.is_attack = None
-        self.num_poisoning = num_posoning
+        self.is_attack = is_attack
         self.poisoning_percent = poisoning_percent
         
     def get_parameters(self, config):
@@ -54,17 +53,22 @@ class MedicalClient(flwr.client.NumPyClient):
     def fit(self, parameters, config):
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
-        if self.is_attack is None:
-            loss, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
+        if not self.is_attack:
+            _, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
         else:
-            attack = PoisonWithBadNets(target_size=(10, 10), target_path=TARGET_PATH, poison_percent=poison_percent)
-            self.train_loader = attack.run_badNets(self.train_loader, "target")
-            loss, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
-            
+            #print(self.poisoning_percent)
+            attack = PoisonWithBadNets(target_size=(10, 10), target_path=TARGET_PATH, poison_percent=self.poisoning_percent)
+            self.trainx_loader = attack.run_badNets(self.train_loader, "target")
+            _, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
+               
         metrics["client"] = self.cid
-        metrics["client"] = self.model_name
+        metrics["model"] = self.model_name
         metrics["round"] = config.get("round", 0)
-        metrics["poisoning"] = self.poisoning_percent 
+        
+        if self.is_attack:
+            metrics["poisoning"] = float(self.poisoning_percent) 
+        
+        print(metrics)
         
         if not os.path.exists(f"train_{self.metrics_file_name}"):
             pd.DataFrame([metrics]).to_csv(f"train_{self.metrics_file_name}", header=True, index=False, mode="a")
@@ -86,7 +90,10 @@ class MedicalClient(flwr.client.NumPyClient):
         
         metrics_test["client"] = self.cid
         metrics_test["round"] = config.get("round", 0)
-        metrics_test["poisoning"] = self.poisoning_percent 
+        metrics_test["model"] = self.model_name
+        
+        if self.is_attack:
+            metrics_test["poisoning"] = float(self.poisoning_percent) 
         
         if not os.path.exists(f"test_{self.metrics_file_name}"):
             pd.DataFrame([metrics_test]).to_csv(f"test_{self.metrics_file_name}", header=True, index=False, mode="a")

@@ -42,8 +42,12 @@ class PoisonWithBadNets():
         for i in range(nb_class):
             src = i
             tgt = (i + 1) % nb_class
-            n_points_in_tgt = np.round(np.sum(y_clean == tgt))
-            num_poison = int((self.poison_percent * n_points_in_tgt) / (1 - self.poison_percent))
+            n_points_in_tgt = int(np.round(np.sum(y_clean == tgt)))
+            print(f"Number of posiong {self.poison_percent}")
+            if n_points_in_tgt > 0:
+                num_poison = int((self.poison_percent * n_points_in_tgt) / (1 - self.poison_percent))
+            else:
+                num_poison = 0
             src_imgs = np.copy(x_clean[y_clean == src])
 
             n_points_in_src = np.shape(src_imgs)[0]

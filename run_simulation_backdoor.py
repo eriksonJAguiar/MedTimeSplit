@@ -30,10 +30,8 @@ batch_size = 64
 image_size = (224, 224)
 model_name = args["model_name"]
 lr = 0.0001
-#epochs = 10
-epochs = 1
-num_rounds = 1
-#num_rounds = 50
+epochs = 10
+num_rounds = 50
 percentagem = float(args["percentage"])
 
 with open("clients_config/clients_params.json", 'r') as f:
@@ -103,7 +101,7 @@ def client_fn(cid):
                                              num_class=num_class,
                                              metrics_file_name="clients_federated_backdoor.csv",
                                              is_attack=True,
-                                             num_posoning=percentagem
+                                             poisoning_percent=percentagem
                                             )
     
     return client_features.to_client()
