@@ -31,8 +31,10 @@ image_size = (224, 224)
 model_name = args["model_name"]
 lr = 0.0001
 epochs = 10
-num_rounds = 50
+#num_rounds = 10
+num_rounds = 10
 percentagem = float(args["percentage"])
+attacked_clients = [0, 1, 2, 4]
 
 with open("clients_config/clients_params.json", 'r') as f:
     hyper_params_clients = json.load(f)
@@ -48,6 +50,15 @@ train_paramters = partitioning.load_database_federated_non_iid(root_path=root_pa
                                                                 image_size=image_size,
                                                                 hyperparams_client=hyper_params_clients
                                                                 )
+
+# train_paramters = partitioning.load_database_federated_continous(root_path=root_path,
+#                                                                 csv_path=csv_path,
+#                                                                 num_clients=num_clients,
+#                                                                 batch_size=batch_size,
+#                                                                 as_rgb=True,
+#                                                                 image_size=image_size,
+#                                                                 hyperparams_client=hyper_params_clients
+#                                                                 )
 
 results_fl = []
 
@@ -89,20 +100,21 @@ def client_fn(cid):
     test_loader = train_paramters["test"]
     num_class = train_paramters["num_class"]
 
-    model = utils.make_model_pretrained(model_name=model_name, num_class=num_class)
-    
+    model = utils.make_model_pretrained(model_name=model_name, num_class=num_class).to(device)
+    print(f"Client {cid} is attacked = {True if int(cid) in attacked_clients else False}")
     client_features = MedicalClient(cid=cid,
-                                             model=model,
-                                             model_name=model_name, 
-                                             train_loader=train_loader[int(cid)],
-                                             test_loader=test_loader[int(cid)], 
-                                             lr=lr, 
-                                             epoch=epochs,
-                                             num_class=num_class,
-                                             metrics_file_name="clients_federated_backdoor.csv",
-                                             is_attack=True,
-                                             poisoning_percent=percentagem
-                                            )
+                                    model=model,
+                                    model_name=model_name, 
+                                    train_loader=train_loader[int(cid)],
+                                    test_loader=test_loader[int(cid)], 
+                                    lr=lr, 
+                                    epoch=epochs,
+                                    num_class=num_class,
+                                    metrics_file_name="clients_federated_backdoor.csv",
+                                    is_attack=True if int(cid) in attacked_clients else False,
+                                    poisoning_percent=percentagem,
+                                    batch_size=batch_size
+                                    )
     
     return client_features.to_client()
 
@@ -112,7 +124,7 @@ strategy = None
 if strategy_name == "FedAvg":
     strategy = CustomFedAvg( 
         fraction_fit=1.0,
-        fraction_evaluate=0.5,
+        fraction_evaluate=1.0,
         min_fit_clients=2,
         min_evaluate_clients=2,
         min_available_clients=2,
@@ -121,7 +133,7 @@ if strategy_name == "FedAvg":
 elif strategy_name == "FedProx":
     strategy = CustomFedProx(
         fraction_fit=1.0,
-        fraction_evaluate=0.5,
+        fraction_evaluate=1.0,
         min_fit_clients=2,
         min_evaluate_clients=2,
         min_available_clients=2,
@@ -131,7 +143,7 @@ elif strategy_name == "FedProx":
 elif strategy_name == "FedNova":
     strategy = CustomFedNova(
         fraction_fit=1.0,
-        fraction_evaluate=0.5,
+        fraction_evaluate=1.0,
         min_fit_clients=2,
         min_evaluate_clients=2,
         min_available_clients=2,
@@ -140,7 +152,7 @@ elif strategy_name == "FedNova":
 elif strategy_name == "FedScaffold":
     strategy = CustomScaffold(
         fraction_fit=1.0,
-        fraction_evaluate=0.5,
+        fraction_evaluate=1.0,
         min_fit_clients=2,
         min_evaluate_clients=2,
         min_available_clients=2,

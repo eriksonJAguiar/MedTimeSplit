@@ -675,7 +675,7 @@ def numpy_to_dataloader(images, labels, batch_size, is_transform=False):
         
     dataset  = CustomDataset(images, labels, tf_image=tf_image)
     
-    loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False)
+    loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False, num_workers=95)
     
     return loader
 

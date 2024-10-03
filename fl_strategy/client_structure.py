@@ -34,7 +34,7 @@ def get_parameters(model):
 class MedicalClient(flwr.client.NumPyClient):
     """Flower client
     """
-    def __init__(self, cid, model, model_name, train_loader, test_loader, lr, epoch, num_class, metrics_file_name, is_attack=False, poisoning_percent=0.0):
+    def __init__(self, cid, model, model_name, train_loader, test_loader, lr, epoch, num_class, metrics_file_name, batch_size=32, is_attack=False, poisoning_percent=0.0):
         self.cid = cid
         self.model = model
         self.model_name = model_name
@@ -46,6 +46,7 @@ class MedicalClient(flwr.client.NumPyClient):
         self.metrics_file_name = metrics_file_name
         self.is_attack = is_attack
         self.poisoning_percent = poisoning_percent
+        self.batch_size = batch_size
         
     def get_parameters(self, config):
         return get_parameters(self.model)
@@ -57,16 +58,16 @@ class MedicalClient(flwr.client.NumPyClient):
             _, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
         else:
             #print(self.poisoning_percent)
-            attack = PoisonWithBadNets(target_size=(10, 10), target_path=TARGET_PATH, poison_percent=self.poisoning_percent)
-            self.trainx_loader = attack.run_badNets(self.train_loader, "target")
+            attack = PoisonWithBadNets(target_size=(10, 10), poison_percent=self.poisoning_percent, batch_size=self.batch_size)
+            self.train_loader = attack.run_badNets(self.train_loader, "pattern")
             _, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
                
         metrics["client"] = self.cid
         metrics["model"] = self.model_name
         metrics["round"] = config.get("round", 0)
         
-        if self.is_attack:
-            metrics["poisoning"] = float(self.poisoning_percent) 
+        #if self.is_attack:
+        metrics["poisoning"] = float(self.poisoning_percent) 
         
         print(metrics)
         
@@ -80,20 +81,23 @@ class MedicalClient(flwr.client.NumPyClient):
     def evaluate(self, parameters, config):
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
-        test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
+        #attack = PoisonWithBadNets(target_size=(10, 10), poison_percent=self.poisoning_percent, batch_size=self.batch_size)
+        #self.train_loader = attack.run_badNets(self.train_loader, "pattern")
+        #test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
         # if not self.is_attack is None:
         #     test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
         # else:
-        #     attack = PoisonWithBadNets(target_size=(10, 10), target_path=TARGET_PATH, poison_percent=self.num_poisoning)
+        #     attack = PoisonWithBadNets(target_size=(20, 20), target_path=TARGET_PATH, poison_percent=self.num_poisoning)
         #     self.test_loader = attack.run_badNets(self.test_loader, "target")
         #     test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
+        test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
         
         metrics_test["client"] = self.cid
         metrics_test["round"] = config.get("round", 0)
         metrics_test["model"] = self.model_name
         
-        if self.is_attack:
-            metrics_test["poisoning"] = float(self.poisoning_percent) 
+        #if self.is_attack:
+        metrics_test["poisoning"] = float(self.poisoning_percent) 
         
         if not os.path.exists(f"test_{self.metrics_file_name}"):
             pd.DataFrame([metrics_test]).to_csv(f"test_{self.metrics_file_name}", header=True, index=False, mode="a")
@@ -225,7 +229,7 @@ class MedicalClientLightning(flwr.client.NumPyClient):
 class MedicalClientContinous(flwr.client.NumPyClient):
     """Flower client
     """
-    def __init__(self, cid, model, model_name, train_loader, test_loader, split_method, num_domain, lr, epoch, num_class, metrics_file_name):
+    def __init__(self, cid, model, model_name, train_loader, test_loader, split_method, num_domain, lr, epoch, num_class, metrics_file_name, is_attack=False, poisoning_percent=0.0):
         self.cid = cid
         self.model = model
         self.model_name = model_name
@@ -237,9 +241,15 @@ class MedicalClientContinous(flwr.client.NumPyClient):
         self.epochs = epoch
         self.num_class = num_class
         self.metrics_file_name = metrics_file_name
+        self.is_attack=is_attack
+        self.poisoning_percent=poisoning_percent
+        
+        if self.is_attack:
+            attack = PoisonWithBadNets(target_size=(10, 10), target_path=TARGET_PATH, poison_percent=self.poisoning_percent)
+            self.train_loader = attack.run_badNets(self.train_loader, "target")
         
         self.benchmark = ni_benchmark(
-            train_dataset=train_loader, 
+            train_dataset=self.train_loader, 
             test_dataset=self.test_loader,
             n_experiences=4, 
             task_labels=False,
@@ -303,6 +313,10 @@ class MedicalClientContinous(flwr.client.NumPyClient):
         
         metrics_test["client"] = self.cid
         metrics_test["round"] = config.get("round", 0)
+        
+        if self.is_attack:
+            metrics_test["poisoning"] = float(self.poisoning_percent) 
+        
         loss = metrics_test["Loss_Exp_eval"]
         print(metrics_test)
         

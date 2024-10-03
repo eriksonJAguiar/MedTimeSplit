@@ -17,9 +17,10 @@ from art.utils import to_categorical
 
 class PoisonWithBadNets():
 
-    def __init__(self, target_size, target_path=None, poison_percent=0.2):
+    def __init__(self, target_size, target_path=None, batch_size=32, poison_percent=0.2):
         self.target_path = target_path
         self.poison_percent = poison_percent
+        self.batch_size = batch_size
         self.target_size = target_size
         self.max_val = 0
     
@@ -37,38 +38,30 @@ class PoisonWithBadNets():
         x_poison = np.copy(x_clean)
         y_poison = np.copy(y_clean)
         is_poison = np.zeros(np.shape(y_poison)[0])
-        nb_class = len(np.unique(y_clean))
+        nb_samples = np.shape(y_clean)[0]
+        num_poison = int(self.poison_percent * nb_samples)
 
-        for i in range(nb_class):
-            src = i
-            tgt = (i + 1) % nb_class
-            n_points_in_tgt = int(np.round(np.sum(y_clean == tgt)))
-            print(f"Number of posiong {self.poison_percent}")
-            if n_points_in_tgt > 0:
-                num_poison = int((self.poison_percent * n_points_in_tgt) / (1 - self.poison_percent))
-            else:
-                num_poison = 0
-            src_imgs = np.copy(x_clean[y_clean == src])
+        print(f"Number of samples: {nb_samples}")
+        print(f"Number of poisoning samples: {num_poison}")
 
-            n_points_in_src = np.shape(src_imgs)[0]
-            if num_poison:
-                indices_to_be_poisoned = np.random.choice(n_points_in_src, num_poison)
+        indices_to_be_poisoned = np.random.choice(nb_samples, num_poison, replace=False)
+        imgs_to_be_poisoned = x_clean[indices_to_be_poisoned]
+        labels_to_be_poisoned = y_clean[indices_to_be_poisoned]
 
-                imgs_to_be_poisoned = src_imgs[indices_to_be_poisoned]
-                labels_to_be_poisoned = np.ones(num_poison) * tgt
-                backdoor_attack = PoisoningAttackBackdoor(poison_func)
-                poison_images, poison_labels = backdoor_attack.poison(
-                    imgs_to_be_poisoned, y=labels_to_be_poisoned
-                )
-                #utils.show_one_image(torch.tensor(poison_images[0]), torch.tensor(poison_labels[0]), "./datasets/poison", "poison_test")
-                
-                x_poison = np.append(x_poison, poison_images, axis=0)
-                y_poison = np.append(y_poison, poison_labels, axis=0)
-                is_poison = np.append(is_poison, np.ones(num_poison))
+        backdoor_attack = PoisoningAttackBackdoor(poison_func)
+        poison_images, poison_labels = backdoor_attack.poison(
+            imgs_to_be_poisoned, y=labels_to_be_poisoned
+        )
+        
+        print(f"Labels: {poison_labels}")
 
-            is_poison = is_poison != 0
+        x_poison[indices_to_be_poisoned] = poison_images
+        y_poison[indices_to_be_poisoned] = poison_labels
+        is_poison[indices_to_be_poisoned] = 1
 
-            return is_poison, x_poison, y_poison
+        is_poison = is_poison != 0
+
+        return is_poison, x_poison, y_poison
     
     def poison_func_pattern(self, x):
         print(x.shape)
@@ -139,7 +132,7 @@ class PoisonWithBadNets():
         x_train = x_poisoned_raw[shuffled_indices]
         y_train = y_poisoned_raw[shuffled_indices]
         
-        dataloader_poisoned = utils.numpy_to_dataloader(images=x_train, labels=y_train, batch_size=32, is_transform=False)
+        dataloader_poisoned = utils.numpy_to_dataloader(images=x_train, labels=y_train, batch_size=self.batch_size, is_transform=True)
         #images, labels = next(iter(dataloader_poisoned))
         
         #utils.show_one_image(images[0], labels[0], "./datasets/poison", "poison_test")
