@@ -1,5 +1,42 @@
-## implementation based on flower repository: https://github.com/adap/flower/blob/main/baselines/niid_bench/niid_bench/strategy.py"
-
+"""
+implementation based on flower repository: https://github.com/adap/flower/blob/main/baselines/niid_bench/niid_bench/strategy.py"
+This module defines custom federated learning strategies based on the Flower framework.
+Classes:
+    CustomFedAvg: Custom implementation of the FedAvg strategy.
+    CustomFedProx: Custom implementation of the FedProx strategy.
+    FedNovaStrategy: Custom FedAvg strategy with FedNova-based configuration and aggregation.
+    ScaffoldStrategy: Custom strategy for SCAFFOLD based on the FedAvg class.
+    CustomFedNova: Custom implementation of the FedNova strategy.
+    CustomScaffold: Custom implementation of the SCAFFOLD strategy.
+CustomFedAvg Methods:
+    configure_fit(server_round, parameters, client_manager):
+        Configure the fit instructions for the clients.
+    configure_evaluate(server_round, parameters, client_manager):
+        Configure the evaluate instructions for the clients.
+CustomFedProx Methods:
+    configure_fit(server_round, parameters, client_manager):
+        Configure the fit instructions for the clients.
+    configure_evaluate(server_round, parameters, client_manager):
+        Configure the evaluate instructions for the clients.
+FedNovaStrategy Methods:
+    aggregate_fit_custom(server_round, server_params, results, failures):
+        Aggregate fit results using a weighted average.
+    aggregate_fednova(results):
+        Implement custom aggregate function for FedNova.
+ScaffoldStrategy Methods:
+    aggregate_fit(server_round, results, failures):
+        Aggregate fit results using a weighted average.
+CustomFedNova Methods:
+    configure_fit(server_round, parameters, client_manager):
+        Configure the fit instructions for the clients.
+    configure_evaluate(server_round, parameters, client_manager):
+        Configure the evaluate instructions for the clients.
+CustomScaffold Methods:
+    configure_fit(server_round, parameters, client_manager):
+        Configure the fit instructions for the clients.
+    configure_evaluate(server_round, parameters, client_manager):
+        Configure the evaluate instructions for the clients.
+"""
 from functools import reduce
 from logging import WARNING
 
@@ -21,8 +58,29 @@ from flwr.common import (
 )
 
 class CustomFedAvg(flwr.server.strategy.FedAvg):
+    """
+    CustomFedAvg is a subclass of the FedAvg strategy from Flower framework.
+    It customizes the configuration of fit and evaluate instructions sent to clients.
+    Methods
+    -------
+    configure_fit(server_round, parameters, client_manager)
+        Create fit instructions with the round number included in the config,
+        sample clients, and return their fit instructions.
+    configure_evaluate(server_round, parameters, client_manager)
+        Create evaluate instructions with the round number included in the config,
+        sample clients, and return their evaluate instructions.
+    """
     def configure_fit(self, server_round, parameters, client_manager):
-        # Create fit instructions with the round number included in the config
+        """
+        Configure the fit instructions for the clients in a federated learning setup.
+        Args:
+            server_round (int): The current round number of the federated learning process.
+            parameters (flwr.common.Parameters): The parameters to be sent to the clients.
+            client_manager (ClientManager): The client manager responsible for handling client sampling.
+        Returns:
+            List[Tuple[Client, flwr.common.FitIns]]: A list of tuples where each tuple contains a client and 
+            the corresponding fit instructions.
+        """
         config = {"round": server_round}
         fit_ins = flwr.common.FitIns(parameters, config)
         
@@ -31,6 +89,16 @@ class CustomFedAvg(flwr.server.strategy.FedAvg):
         return [(client, fit_ins) for client in clients]
     
     def configure_evaluate(self, server_round, parameters, client_manager):
+        """
+        Configure the evaluation instructions for the given server round.
+        Args:
+            server_round (int): The current round of the server.
+            parameters (flwr.common.Parameters): The parameters to be evaluated.
+            client_manager (ClientManager): The client manager to sample clients from.
+        Returns:
+            List[Tuple[ClientProxy, flwr.common.EvaluateIns]]: A list of tuples containing 
+            the client proxies and their corresponding evaluation instructions.
+        """
         config = {"round": server_round}
         evaluate_ins = flwr.common.EvaluateIns(parameters, config)
         
@@ -39,7 +107,32 @@ class CustomFedAvg(flwr.server.strategy.FedAvg):
         return [(client, evaluate_ins) for client in clients]
 
 class CustomFedProx(flwr.server.strategy.FedProx):
+    """
+        Configures the evaluate instructions for the clients for a given round.
+        Parameters
+        ----------
+        server_round : int
+            The current round of federated learning.
+        parameters : flwr.common.Parameters
+            The parameters to be sent to the clients.
+        client_manager : flwr.server.client_manager.ClientManager
+            The client manager to sample clients from.
+        Returns
+        -------
+        List[Tuple[flwr.server.client_proxy.ClientProxy, flwr.common.EvaluateIns]]
+            A list of tuples containing the client proxy and the evaluate instructions.
+    """
     def configure_fit(self, server_round, parameters, client_manager):
+        """
+        Configure the fit instructions for the clients in a federated learning setup.
+        Args:
+            server_round (int): The current round number of the federated learning process.
+            parameters (flwr.common.Parameters): The parameters to be sent to the clients for training.
+            client_manager (ClientManager): The client manager responsible for handling client sampling.
+        Returns:
+            List[Tuple[Client, flwr.common.FitIns]]: A list of tuples where each tuple contains a client and 
+            their corresponding fit instructions.
+        """
         # Create fit instructions with the round number included in the config
         config = {"round": server_round}
         fit_ins = flwr.common.FitIns(parameters, config)
@@ -49,6 +142,15 @@ class CustomFedProx(flwr.server.strategy.FedProx):
         return [(client, fit_ins) for client in clients]
     
     def configure_evaluate(self, server_round, parameters, client_manager):
+        """
+        Configure the evaluation instructions for the given server round.
+        Args:
+            server_round (int): The current round of the server.
+            parameters (flwr.common.Parameters): The parameters to be evaluated.
+            client_manager (ClientManager): The client manager to sample clients from.
+        Returns:
+            List[Tuple[Client, flwr.common.EvaluateIns]]: A list of tuples where each tuple contains a client and the evaluation instructions.
+        """
         config = {"round": server_round}
         evaluate_ins = flwr.common.EvaluateIns(parameters, config)
         
@@ -58,7 +160,7 @@ class CustomFedProx(flwr.server.strategy.FedProx):
 
 class FedNovaStrategy(flwr.server.strategy.FedAvg):
     """Custom FedAvg strategy with fednova based configuration and aggregation."""
-
+    
     def aggregate_fit_custom(
         self,
         server_round: int,

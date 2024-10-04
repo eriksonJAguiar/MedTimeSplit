@@ -70,6 +70,27 @@ train, test, num_class = split_method[split_key]
 results_fl = []
 
 def weighted_average(metrics):
+    """
+    Calculate the weighted average of various evaluation metrics.
+    Args:
+        metrics (list of tuples): A list where each element is a tuple containing the number of examples 
+                                  and a dictionary of metrics for a client. The dictionary should have 
+                                  the following keys:
+                                  - "Top1_Acc_Exp_eval": Accuracy of the client on the experimental evaluation.
+                                  - "Top1_Acc_Stream_eval": Accuracy of the client on the stream evaluation.
+                                  - "StreamForgetting_eval": Forgetting metric of the client on the stream evaluation.
+                                  - "StreamBWT_eval": Backward transfer metric of the client on the stream evaluation.
+                                  - "AverageBadDecision_eval": Average bad decision metric of the client.
+                                  - "OCM_eval": Other custom metric of the client.
+    Returns:
+        dict: A dictionary containing the weighted average of the following metrics:
+              - "val_accuracy_exp": Weighted average of the experimental accuracy.
+              - "val_accuracy_stream": Weighted average of the stream accuracy.
+              - "val_forgetting": Weighted average of the forgetting metric.
+              - "val_btw": Weighted average of the backward transfer metric.
+              - "val_adb": Weighted average of the average bad decision metric.
+              - "val_ocm": Weighted average of the other custom metric.
+    """
     # Multiply accuracy of each client by number of examples used
     acc_exp = [num_examples * m["Top1_Acc_Exp_eval"] for num_examples, m in metrics]
     acc_stream = [num_examples * m["Top1_Acc_Stream_eval"] for num_examples, m in metrics]

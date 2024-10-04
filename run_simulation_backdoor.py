@@ -51,15 +51,6 @@ train_paramters = partitioning.load_database_federated_non_iid(root_path=root_pa
                                                                 hyperparams_client=hyper_params_clients
                                                                 )
 
-# train_paramters = partitioning.load_database_federated_continous(root_path=root_path,
-#                                                                 csv_path=csv_path,
-#                                                                 num_clients=num_clients,
-#                                                                 batch_size=batch_size,
-#                                                                 as_rgb=True,
-#                                                                 image_size=image_size,
-#                                                                 hyperparams_client=hyper_params_clients
-#                                                                 )
-
 results_fl = []
 
 def weighted_average(metrics):
@@ -91,11 +82,21 @@ def weighted_average(metrics):
     return results
 
 def client_fn(cid):
-    """read client features
-
-    Returns:
-        client_features (MedicalClient): a flower client
     """
+    Initializes and returns a MedicalClient object configured for federated learning with potential backdoor attacks.
+    Args:
+        cid (int): Client ID.
+    Returns:
+        MedicalClient: Configured MedicalClient object for the given client ID.
+    The function performs the following steps:
+    1. Retrieves training and testing data loaders and the number of classes from the global `train_paramters` dictionary.
+    2. Creates a pretrained model using the specified `model_name` and number of classes, and moves it to the specified device.
+    3. Prints whether the client is attacked based on the client ID.
+    4. Initializes a `MedicalClient` object with the provided parameters, including whether the client is attacked and the poisoning percentage.
+    5. Returns the `MedicalClient` object configured for federated learning.
+    Note:
+        - The `train_paramters`, `model_name`, `device`, `attacked_clients`, `lr`, `epochs`, `percentagem`, and `batch_size` variables are assumed to be defined globally.
+    """ 
     train_loader = train_paramters["train"]
     test_loader = train_paramters["test"]
     num_class = train_paramters["num_class"]

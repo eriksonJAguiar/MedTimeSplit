@@ -17,6 +17,12 @@ import os
 TARGET_PATH = "/home/eriksonaguiar/codes/fl_medical/backdoors/target/alert.png"
 
 def set_parameters(model, parameters):
+    """
+    Set the parameters of a given model.
+    Args:
+        model (torch.nn.Module): The model whose parameters are to be set.
+        parameters (iterable): An iterable containing the new parameters for the model.
+    """
     params_dict = zip(model.state_dict().keys(), parameters)
     #state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
     state_dict = OrderedDict(
@@ -29,12 +35,58 @@ def set_parameters(model, parameters):
     
 
 def get_parameters(model):
+    """
+    Extracts and returns the parameters of a given model as a list of NumPy arrays.
+    Args:
+        model (torch.nn.Module): The PyTorch model from which to extract parameters.
+    Returns:
+        List[np.ndarray]: A list of NumPy arrays containing the parameters of the model.
+    """
     return [val.cpu().numpy() for _, val in model.state_dict().items()]
 
 class MedicalClient(flwr.client.NumPyClient):
-    """Flower client
+    """
+    A custom client class for federated learning in a medical context, extending the Flower NumPyClient.
+    Attributes:
+        cid (str): Client ID.
+        model (torch.nn.Module): The machine learning model.
+        model_name (str): The name of the model.
+        train_loader (torch.utils.data.DataLoader): DataLoader for training data.
+        test_loader (torch.utils.data.DataLoader): DataLoader for testing data.
+        lr (float): Learning rate for training.
+        epochs (int): Number of epochs for training.
+        num_class (int): Number of classes in the dataset.
+        metrics_file_name (str): Filename for saving metrics.
+        batch_size (int, optional): Batch size for training. Default is 32.
+        is_attack (bool, optional): Flag indicating if the client is performing an attack. Default is False.
+        poisoning_percent (float, optional): Percentage of data to be poisoned if performing an attack. Default is 0.0.
+    Methods:
+        get_parameters(config):
+            Returns the model parameters.
+        fit(parameters, config):
+            Trains the model with the given parameters and configuration.
+            Returns the updated model parameters, number of training samples, and training metrics.
+        evaluate(parameters, config):
+            Evaluates the model with the given parameters and configuration.
+            Returns the test loss, number of test samples, and test metrics.
     """
     def __init__(self, cid, model, model_name, train_loader, test_loader, lr, epoch, num_class, metrics_file_name, batch_size=32, is_attack=False, poisoning_percent=0.0):
+        """
+        Initializes the client structure for federated learning.
+        Args:
+            cid (int): Client ID.
+            model (torch.nn.Module): The model to be trained.
+            model_name (str): Name of the model.
+            train_loader (torch.utils.data.DataLoader): DataLoader for training data.
+            test_loader (torch.utils.data.DataLoader): DataLoader for testing data.
+            lr (float): Learning rate for the optimizer.
+            epoch (int): Number of epochs for training.
+            num_class (int): Number of classes in the dataset.
+            metrics_file_name (str): File name to save metrics.
+            batch_size (int, optional): Batch size for training. Defaults to 32.
+            is_attack (bool, optional): Flag to indicate if the client is under attack. Defaults to False.
+            poisoning_percent (float, optional): Percentage of data poisoning. Defaults to 0.0.
+        """
         self.cid = cid
         self.model = model
         self.model_name = model_name
@@ -49,15 +101,38 @@ class MedicalClient(flwr.client.NumPyClient):
         self.batch_size = batch_size
         
     def get_parameters(self, config):
+        """
+        Retrieve the parameters of the model.
+        Args:
+            config (dict): Configuration dictionary (not used in the current implementation).
+        Returns:
+            list: Parameters of the model.
+        """
         return get_parameters(self.model)
         
     def fit(self, parameters, config):
+        """
+        Train the model on the client's data.
+        Args:
+            parameters (list): The parameters to set in the model before training.
+            config (dict): Configuration dictionary containing training settings.
+        Returns:
+            tuple: A tuple containing the model parameters after training, the number of samples used for training, and a dictionary of training metrics.
+        The function performs the following steps:
+        1. Sets the model parameters.
+        2. Prints the client ID and configuration.
+        3. Checks if the client is under attack:
+            - If not, trains the model using the centralized training method.
+            - If under attack, applies a poisoning attack to the training data and then trains the model.
+        4. Adds client-specific information to the metrics.
+        5. Saves the metrics to a CSV file.
+        6. Returns the updated model parameters, the number of training samples, and the metrics.
+        """
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
         if not self.is_attack:
             _, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
         else:
-            #print(self.poisoning_percent)
             attack = PoisonWithBadNets(target_size=(10, 10), poison_percent=self.poisoning_percent, batch_size=self.batch_size)
             self.train_loader = attack.run_badNets(self.train_loader, "pattern")
             _, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
@@ -66,7 +141,6 @@ class MedicalClient(flwr.client.NumPyClient):
         metrics["model"] = self.model_name
         metrics["round"] = config.get("round", 0)
         
-        #if self.is_attack:
         metrics["poisoning"] = float(self.poisoning_percent) 
         
         print(metrics)
@@ -79,6 +153,20 @@ class MedicalClient(flwr.client.NumPyClient):
         return self.get_parameters(self.model), len(self.train_loader), metrics
 
     def evaluate(self, parameters, config):
+        """
+        Evaluate the model on the test dataset and log the metrics.
+        Args:
+            parameters (dict): The parameters to set in the model.
+            config (dict): Configuration dictionary containing evaluation settings.
+        Returns:
+            tuple: A tuple containing:
+                - float: The test loss.
+                - int: The number of samples in the test loader.
+                - dict: The evaluation metrics including client ID, round number, model name, and poisoning percentage.
+        Notes:
+            - The function sets the model parameters, evaluates the model on the test dataset, and logs the metrics.
+            - If the metrics file does not exist, it creates a new file with headers; otherwise, it appends to the existing file.
+        """
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
         #attack = PoisonWithBadNets(target_size=(10, 10), poison_percent=self.poisoning_percent, batch_size=self.batch_size)
@@ -87,7 +175,7 @@ class MedicalClient(flwr.client.NumPyClient):
         # if not self.is_attack is None:
         #     test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
         # else:
-        #     attack = PoisonWithBadNets(target_size=(20, 20), target_path=TARGET_PATH, poison_percent=self.num_poisoning)
+        #     attack = PoisonWithBadNets(target_size=(20, 20), target_path=TARGET_PATH, poison_percent=self.poisoning_percent)
         #     self.test_loader = attack.run_badNets(self.test_loader, "target")
         #     test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
         test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
@@ -227,9 +315,66 @@ class MedicalClientLightning(flwr.client.NumPyClient):
         return float(test_loss), len(self.test_loader), results
     
 class MedicalClientContinous(flwr.client.NumPyClient):
-    """Flower client
     """
+    A Flower client for continuous federated learning in a medical setting.
+    Attributes:
+        cid (str): Client ID.
+        model (torch.nn.Module): The model to be trained and evaluated.
+        model_name (str): Name of the model.
+        train_loader (torch.utils.data.DataLoader): DataLoader for the training dataset.
+        test_loader (torch.utils.data.DataLoader): DataLoader for the test dataset.
+        split_method (str): Method used for splitting the data.
+        num_domain (int): Number of domains for continual learning.
+        lr (float): Learning rate.
+        epochs (int): Number of epochs for training.
+        num_class (int): Number of classes in the dataset.
+        metrics_file_name (str): File name for saving metrics.
+        is_attack (bool): Flag indicating if the client is under attack.
+        poisoning_percent (float): Percentage of data to be poisoned if under attack.
+    Methods:
+        __init__(self, cid, model, model_name, train_loader, test_loader, split_method, num_domain, lr, epoch, num_class, metrics_file_name, is_attack=False, poisoning_percent=0.0):
+            Initializes the MedicalClientContinous with the given parameters.
+        get_parameters(self, config):
+            Returns the model parameters.
+        fit(self, parameters, config):
+            Trains the model on the client's data and returns the updated parameters.
+        evaluate(self, parameters, config):
+            Evaluates the model on the client's test data and returns the evaluation metrics.
+    """
+    
     def __init__(self, cid, model, model_name, train_loader, test_loader, split_method, num_domain, lr, epoch, num_class, metrics_file_name, is_attack=False, poisoning_percent=0.0):
+        """
+        Initializes the client structure with the given parameters.
+        Args:
+            cid (int): Client ID.
+            model (torch.nn.Module): The model to be used.
+            model_name (str): The name of the model.
+            train_loader (torch.utils.data.DataLoader): DataLoader for the training data.
+            test_loader (torch.utils.data.DataLoader): DataLoader for the testing data.
+            split_method (str): Method used for splitting the data.
+            num_domain (int): Number of domains.
+            lr (float): Learning rate.
+            epoch (int): Number of epochs.
+            num_class (int): Number of classes.
+            metrics_file_name (str): Name of the file to store metrics.
+            is_attack (bool, optional): Flag indicating if an attack is to be performed. Defaults to False.
+            poisoning_percent (float, optional): Percentage of data to be poisoned if attack is True. Defaults to 0.0.
+        Attributes:
+            cid (int): Client ID.
+            model (torch.nn.Module): The model to be used.
+            model_name (str): The name of the model.
+            train_loader (torch.utils.data.DataLoader): DataLoader for the training data.
+            test_loader (torch.utils.data.DataLoader): DataLoader for the testing data.
+            split_method (str): Method used for splitting the data.
+            num_domain (int): Number of domains.
+            lr (float): Learning rate.
+            epochs (int): Number of epochs.
+            num_class (int): Number of classes.
+            metrics_file_name (str): Name of the file to store metrics.
+            is_attack (bool): Flag indicating if an attack is to be performed.
+            poisoning_percent (float): Percentage of data to be poisoned if attack is True.
+            benchmark (ni_benchmark): Benchmark object for training and testing.
+        """
         self.cid = cid
         self.model = model
         self.model_name = model_name
@@ -258,21 +403,26 @@ class MedicalClientContinous(flwr.client.NumPyClient):
         )
         
     def get_parameters(self, config):
+        """
+        Retrieve the parameters of the model.
+        Args:
+            config (dict): Configuration dictionary (currently unused).
+        Returns:
+            list: Parameters of the model.
+        """
         return get_parameters(self.model)
         
     def fit(self, parameters, config):
+        """
+        Fit the model with the given parameters and configuration.
+        Args:
+            parameters (list): The parameters to set in the model.
+            config (dict): Configuration settings for the fitting process.
+        Returns:
+            tuple: A tuple containing the model parameters after fitting, the length of the training loader, and an empty dictionary.
+        """
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
-        #loss, metrics, _ = centralized.train(self.model, self.train_loader, epochs=self.epochs, lr=self.lr, num_class=self.num_class)
-        
-        # benchmark = ni_benchmark(
-        #     train_dataset=self.train, 
-        #     test_dataset=self.test,
-        #     n_experiences=4, 
-        #     task_labels=False,
-        #     shuffle=True, 
-        #     balance_experiences=True
-        # )
     
         train_stream_online = split_online_stream(
             original_stream=self.benchmark.train_stream,
@@ -287,10 +437,29 @@ class MedicalClientContinous(flwr.client.NumPyClient):
             num_domains=self.num_domain
         )
         
-        
         return self.get_parameters(self.model), len(self.train_loader), {}
 
     def evaluate(self, parameters, config):
+        """
+        Evaluate the model on the test data and log the metrics.
+        Args:
+            parameters (dict): The parameters to set in the model.
+            config (dict): Configuration dictionary containing various settings.
+        Returns:
+            tuple: A tuple containing:
+            - float: The loss value.
+            - int: The length of the test loader.
+            - dict: The metrics dictionary containing evaluation results.
+        The function performs the following steps:
+        1. Sets the model parameters.
+        2. Prints the client ID and configuration.
+        3. Splits the test stream into smaller online streams.
+        4. Evaluates the model using continual testing.
+        5. Adds client ID and round information to the metrics.
+        6. If an attack is present, adds poisoning percentage to the metrics.
+        7. Logs the metrics to a CSV file.
+        8. Returns the loss, length of the test loader, and the metrics dictionary.
+        """
         set_parameters(self.model, parameters)
         print(f"[Client {self.cid}] fit, config: {config}")
         #test_loss, metrics_test,  _ = centralized.test(model=self.model,test_loader=self.test_loader, num_class=self.num_class, epochs=self.epochs)
