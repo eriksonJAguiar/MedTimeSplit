@@ -1,9 +1,10 @@
-from typing import Any, Optional, Sequence, Type, Union, Literal
+from typing import Any, Optional, Literal
 
 import torchmetrics
+import torch
 from avalanche.evaluation import PluginMetric, Metric, GenericPluginMetric
 from avalanche.evaluation.metrics.mean import Mean
-import torch
+from avalanche.evaluation import Metric
 
 class BalancedAccuracy(torchmetrics.Metric):
     def __init__(
@@ -309,9 +310,6 @@ class OCM(OCMPluginMetric):
     def __str__(self):
         return "OCM"
     
-from avalanche.evaluation import Metric
-import torch
-
 class AverageForgettingMetric(Metric[float]):
     """
     Average Forgetting (AF) metric.
